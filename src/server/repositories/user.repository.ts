@@ -3,6 +3,10 @@ import type { UserEntity } from "@/server/domain/entities";
 const users: UserEntity[] = [];
 
 export const userRepository = {
+  async findAll(): Promise<UserEntity[]> {
+    return [...users];
+  },
+
   async findByEmail(email: string): Promise<UserEntity | null> {
     return users.find((u) => u.email === email) ?? null;
   },
