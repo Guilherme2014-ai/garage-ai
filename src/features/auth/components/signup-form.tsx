@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { useState } from "react";
 
 export function SignUpForm() {
@@ -28,8 +29,20 @@ export function SignUpForm() {
 
       if (!data.success) {
         setError(data.message ?? "Something went wrong");
-      } else {
+        return;
+      }
+
+      const signInResult = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (signInResult?.error) {
         router.push("/auth/signin");
+      } else {
+        router.push("/");
+        router.refresh();
       }
     } catch {
       setError("Something went wrong. Please try again.");

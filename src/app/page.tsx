@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { HeaderAuth } from "@/features/auth/components/header-auth";
 import { BeforeAfterShowcase } from "@/features/landing/components/before-after-slider";
 import { Gallery } from "@/features/landing/components/gallery";
 
@@ -100,9 +101,9 @@ function Header() {
           <Image
             src="/assets/logo-01.png"
             alt="Garage AI"
-            width={40}
-            height={40}
-            className="h-10 w-10"
+            width={60}
+            height={60}
+            className="h-16 w-16"
           />
           <span className="flex flex-col leading-none">
             <span className="font-extrabold text-lg tracking-tight">
@@ -112,7 +113,7 @@ function Header() {
               </span>
             </span>
             <span className="mt-0.5 text-[9px] text-zinc-500 tracking-[0.25em]">
-              CUSTOMIZE. VISUALIZE. PERFECT.
+              CUSTOMIZE YOUR CAR YOUR WAY
             </span>
           </span>
         </Link>
@@ -130,19 +131,7 @@ function Header() {
         </nav>
 
         <div className="flex items-center gap-4">
-          <Link
-            href="/auth/signin"
-            className="hidden text-sm text-zinc-300 transition hover:text-white sm:block"
-          >
-            Log In
-          </Link>
-          <Link
-            href="/auth/signup"
-            className="group flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-blue-500 px-4 py-2 font-medium text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90"
-          >
-            Start Customizing
-            <ArrowRightIcon className="h-4 w-4 transition group-hover:translate-x-0.5" />
-          </Link>
+          <HeaderAuth />
         </div>
       </div>
     </header>
@@ -151,7 +140,7 @@ function Header() {
 
 function Hero() {
   return (
-    <section className="mx-auto grid max-w-7xl items-center gap-12 px-6 py-16 lg:grid-cols-2 lg:py-24">
+    <section className="mx-auto grid max-w-7xl items-center gap-12 px-6 py-4 lg:grid-cols-2">
       <div>
         <span className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 font-medium text-violet-300 text-xs tracking-wide">
           <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
@@ -169,8 +158,10 @@ function Hero() {
         </h1>
 
         <p className="mt-6 max-w-md text-zinc-400 leading-relaxed">
-          Upload your car and transform it your way. Endless parts, colors, and
-          styles. Realistic results.
+          From deep-dish wheels and lowered suspension to widebody conversions,
+          spoilers, splitters, diffusers, wraps, and race-inspired builds—upload
+          your car and see your dream setup come to life before making a single
+          modification.
         </p>
 
         <div className="mt-8 max-w-md rounded-2xl border border-violet-500/30 border-dashed bg-violet-500/5 p-6">

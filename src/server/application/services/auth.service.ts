@@ -1,6 +1,10 @@
 import bcrypt from "bcryptjs";
 import type { UserEntity } from "@/server/domain/entities";
-import { ConflictError, ValidationError } from "@/server/domain/errors";
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from "@/server/domain/errors";
 import { userRepository } from "@/server/repositories";
 
 export interface SignUpInput {
@@ -12,6 +16,10 @@ export interface SignUpInput {
 export interface SignInInput {
   email: string;
   password: string;
+}
+
+export interface UpdateProfileInput {
+  name?: string;
 }
 
 function toAuthResult(entity: UserEntity) {
@@ -75,5 +83,35 @@ export const authService = {
     const user = await userRepository.findById(id);
     if (!user) return null;
     return toAuthResult(user);
+  },
+
+  async getUserByEmail(email: string) {
+    const user = await userRepository.findByEmail(email);
+    if (!user) return null;
+    return toAuthResult(user);
+  },
+
+  async updateProfile(email: string, data: UpdateProfileInput) {
+    const user = await userRepository.findByEmail(email);
+    if (!user) {
+      throw new NotFoundError("User");
+    }
+
+    const changes: Partial<UserEntity> = {};
+
+    if (data.name !== undefined) {
+      const name = data.name.trim();
+      if (!name) {
+        throw new ValidationError("Name cannot be empty");
+      }
+      changes.name = name;
+    }
+
+    const updated = await userRepository.update(user.id, changes);
+    if (!updated) {
+      throw new NotFoundError("User");
+    }
+
+    return toAuthResult(updated);
   },
 };
