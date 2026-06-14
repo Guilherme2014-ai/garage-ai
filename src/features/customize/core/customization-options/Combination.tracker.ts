@@ -27,14 +27,3 @@ export class CombinationTracker<K extends string> {
     return Array.from(this.combinations);
   }
 }
-
-export const combinationTracker = new CombinationTracker<"wheels" | "paint">();
-
-combinationTracker.addCombination({ wheels: "vortex", paint: "red" });
-combinationTracker.addCombination({ paint: "red", wheels: "vortex" });
-combinationTracker.addCombination({ paint: "red", wheels: "vortex" });
-combinationTracker.addCombination({ wheels: "vortex", paint: "red" });
-combinationTracker.addCombination({ paint: "red", wheels: "elite" });
-
-console.log(combinationTracker.getCombinationList());
-console.log(combinationTracker.getLastCombination());
