@@ -1,11 +1,21 @@
-export function parseCombinationString<K extends string>(combinationString: string): Record<K, string> {
+/**
+ * Inverse of {@link buildCombinationString}. Rebuilds the selections map from a
+ * combination string. An empty string maps to an empty combination.
+ */
+export function parseCombinationString<K extends string>(
+  combinationString: string,
+): Partial<Record<K, string>> {
+  if (!combinationString) {
+    return {};
+  }
+
   return combinationString
     .split("|")
-    .map((item) => {
+    .reduce<Partial<Record<K, string>>>((acc, item) => {
       const [key, value] = item.split("__");
-      return { [key as K]: value };
-    })
-    .reduce((acc, curr) => {
-      return Object.assign(acc, curr);
-    }, {}) as Record<K, string>;
+      if (key) {
+        acc[key as K] = value;
+      }
+      return acc;
+    }, {});
 }
