@@ -3,6 +3,7 @@ import { generateText } from "@/server/infrastructure/wavespeed/wavespeed-llm";
 import {
   buildSystemPrompt,
   buildUserPrompt,
+  MAX_OPTIONS_PER_CATEGORY,
   MIN_OPTIONS_PER_CATEGORY,
 } from "./promptBuilder";
 import type {
@@ -138,8 +139,7 @@ function buildResult(
     const options = list
       .map((item, index) => coerceOption(item, index + 1))
       .filter((option) => option.name && option.brand)
-      .sort((a, b) => a.rank - b.rank)
-      .map((option, index) => ({ ...option, rank: index + 1 }));
+      .sort((a, b) => a.rank - b.rank);
 
     if (options.length < MIN_OPTIONS_PER_CATEGORY) {
       throw new Error(
@@ -147,7 +147,10 @@ function buildResult(
       );
     }
 
-    categories[category] = options;
+    // Keep at most MAX options, then normalize ranks to the final order.
+    categories[category] = options
+      .slice(0, MAX_OPTIONS_PER_CATEGORY)
+      .map((option, index) => ({ ...option, rank: index + 1 }));
   }
 
   return {

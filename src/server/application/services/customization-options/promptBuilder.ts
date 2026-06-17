@@ -3,6 +3,9 @@ import type { GenerateCustomizationOptionsInput } from "./types";
 /** Minimum number of options the model must return per category. */
 export const MIN_OPTIONS_PER_CATEGORY = 8;
 
+/** Maximum number of options kept per category. */
+export const MAX_OPTIONS_PER_CATEGORY = 15;
+
 /**
  * System prompt: establishes the model as a domain expert and pins the output
  * contract. Kept separate from the user prompt so behavior tuning and content
@@ -45,7 +48,7 @@ export function buildUserPrompt({
     "of the requested categories.",
     "",
     "Requirements:",
-    `- Provide at least ${MIN_OPTIONS_PER_CATEGORY} options per category.`,
+    `- Provide between ${MIN_OPTIONS_PER_CATEGORY} and ${MAX_OPTIONS_PER_CATEGORY} options per category (never fewer than ${MIN_OPTIONS_PER_CATEGORY}, never more than ${MAX_OPTIONS_PER_CATEGORY}).`,
     "- Rank options from most relevant (rank 1) to least relevant, and order",
     "  the array to match the ranking.",
     "- Recommendations must fit this exact vehicle's style, era, culture, and",

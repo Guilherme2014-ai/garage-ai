@@ -13,15 +13,6 @@ import { findOptionInData } from "./utils/findOptionInData";
 type Listener = (data: CustomizationData) => void;
 
 /**
- * Max option-preview requests this client fans out at once per category. The
- * authoritative WaveSpeed limit is enforced server-side (see
- * `wavespeed-concurrency.ts`, `WAVESPEED_CONCURRENCY_LENGHT`); this is just a
- * client-side batching ceiling so a single session does not open an unbounded
- * number of in-flight requests.
- */
-const PREVIEW_CONCURRENCY = 6;
-
-/**
  * Produces the car image URL for an option, applied on top of a base car image.
  * Injected so the domain stays decoupled from the backend transport.
  */
@@ -39,39 +30,18 @@ function cloneData(data: CustomizationData): CustomizationData {
 }
 
 /**
- * Runs `task` over `items` with a bounded number of concurrent executions, so a
- * category with many options does not fire every request at once.
- */
-async function runWithConcurrency<T>(
-  items: T[],
-  limit: number,
-  task: (item: T) => Promise<void>,
-): Promise<void> {
-  let cursor = 0;
-  const workers = Array.from(
-    { length: Math.min(limit, items.length) },
-    async () => {
-      while (cursor < items.length) {
-        const item = items[cursor];
-        cursor += 1;
-        await task(item);
-      }
-    },
-  );
-  await Promise.all(workers);
-}
-
-/**
  * Orchestrates the customization flow by tying together three concerns:
  *
  * - {@link CombinationTracker}: version-control history of combinations.
  * - {@link CombinationsStringCache}: cache of generated snapshots per combination.
  * - the active {@link CustomizationData}: the working state surfaced to the UI.
  *
- * Previews are generated at the category level: entering a category generates,
- * in parallel, the preview for every option (each applied on top of the
- * category's base image). Selecting an option then commits its already-generated
- * preview, and leaving the category checkpoints the combination.
+ * Previews are generated at the category level: entering a category generates
+ * the preview for every option sequentially, in display order (first to last),
+ * each applied on top of the category's base image. Generating in order means
+ * the previews the user sees first (the top of the list) are the first to load.
+ * Selecting an option then commits its already-generated preview, and leaving
+ * the category checkpoints the combination.
  */
 export class CustomizationDataCoordinator {
   private readonly tracker = new CombinationTracker<CustomizationCategory>();
@@ -156,10 +126,11 @@ export class CustomizationDataCoordinator {
   // --- category lifecycle -------------------------------------------------
 
   /**
-   * Entering a category generates the preview for every option in parallel,
-   * each applied on top of the category's base image (the current build without
-   * this category's own selection). Previews already in the image cache are
-   * reused instantly; the rest are generated and cached.
+   * Entering a category generates the preview for every option sequentially, in
+   * display order (first to last), each applied on top of the category's base
+   * image (the current build without this category's own selection). Previews
+   * already in the image cache are reused instantly; the rest are generated and
+   * cached. Generating in order prioritizes the previews the user sees first.
    */
   public async enterCategory(category: CustomizationCategory): Promise<void> {
     const content = this.data.categories[category];
@@ -208,7 +179,15 @@ export class CustomizationDataCoordinator {
       return;
     }
 
-    await runWithConcurrency(pending, PREVIEW_CONCURRENCY, async (item) => {
+    // Generate sequentially, in display order, so the first (top, most visible)
+    // options load first instead of completing in an arbitrary order.
+    for (const item of pending) {
+      // The user may have moved to another category/base while we were
+      // generating; stop so we don't keep producing stale previews.
+      if (this.categoryPreviewBase.get(category) !== baseString) {
+        return;
+      }
+
       const combinationString = buildCombinationString({
         ...baseSelections,
         [category]: item.slug,
@@ -234,7 +213,7 @@ export class CustomizationDataCoordinator {
           imageUrl: null,
         });
       }
-    });
+    }
   }
 
   /**
