@@ -13,6 +13,16 @@ export enum CustomizationCategory {
  */
 export type GenerationStatus = "not-generated" | "generating" | "generated";
 
+/**
+ * The generated preview for a single option, showing the option applied on top
+ * of the category's base image. Generated in parallel when a category is
+ * entered.
+ */
+export type ItemPreview = {
+  status: GenerationStatus;
+  imageUrl: string | null;
+};
+
 /** A single selectable customization option within a category. */
 export type CustomizationCategoryItem = {
   slug: string;
@@ -28,6 +38,8 @@ export type CustomizationCategoryItem = {
   visualDescription?: string;
   /** Reserved for the real AI-generated option asset. */
   banner?: string;
+  /** The car image with this option applied (per-option preview). */
+  preview?: ItemPreview;
 };
 
 /** Available options for a category plus their generation status. */

@@ -1,4 +1,5 @@
 import { Client } from "wavespeed";
+import { runWithWaveSpeedLimit } from "./wavespeed-concurrency";
 
 const MODEL = "google/nano-banana-2/edit";
 
@@ -22,16 +23,18 @@ export async function editImage({
 }: EditImageOptions): Promise<string> {
   const client = new Client();
 
-  const result = await client.run(MODEL, {
-    enable_base64_output: false,
-    enable_image_search: false,
-    enable_sync_mode: false,
-    enable_web_search: false,
-    images: imageUrls,
-    output_format: outputFormat,
-    prompt,
-    resolution,
-  });
+  const result = await runWithWaveSpeedLimit(() =>
+    client.run(MODEL, {
+      enable_base64_output: false,
+      enable_image_search: false,
+      enable_sync_mode: false,
+      enable_web_search: false,
+      images: imageUrls,
+      output_format: outputFormat,
+      prompt,
+      resolution,
+    }),
+  );
 
   const outputUrl = result.outputs?.[0];
   if (typeof outputUrl !== "string" || !outputUrl) {

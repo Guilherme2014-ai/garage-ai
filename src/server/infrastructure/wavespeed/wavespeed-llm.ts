@@ -1,4 +1,5 @@
 import { Client } from "wavespeed";
+import { runWithWaveSpeedLimit } from "./wavespeed-concurrency";
 
 const MODEL_ENDPOINT = "wavespeed-ai/any-llm";
 const DEFAULT_LLM = "openai/gpt-5-chat";
@@ -34,16 +35,18 @@ export async function generateText({
 }: GenerateTextOptions): Promise<string> {
   const client = new Client();
 
-  const result = await client.run(MODEL_ENDPOINT, {
-    enable_sync_mode: false,
-    model,
-    priority,
-    reasoning,
-    prompt,
-    ...(systemPrompt ? { system_prompt: systemPrompt } : {}),
-    ...(temperature !== undefined ? { temperature } : {}),
-    ...(maxTokens !== undefined ? { max_tokens: maxTokens } : {}),
-  });
+  const result = await runWithWaveSpeedLimit(() =>
+    client.run(MODEL_ENDPOINT, {
+      enable_sync_mode: false,
+      model,
+      priority,
+      reasoning,
+      prompt,
+      ...(systemPrompt ? { system_prompt: systemPrompt } : {}),
+      ...(temperature !== undefined ? { temperature } : {}),
+      ...(maxTokens !== undefined ? { max_tokens: maxTokens } : {}),
+    }),
+  );
 
   const output = result.outputs?.[0];
   if (typeof output !== "string" || !output) {

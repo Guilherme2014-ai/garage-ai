@@ -60,6 +60,9 @@ export function CategoryPanel({
             category,
             data.selections[category],
           );
+          const isGenerating = content.items.some(
+            (item) => item.preview?.status === "generating",
+          );
 
           return (
             <button
@@ -88,7 +91,7 @@ export function CategoryPanel({
                 </span>
               </span>
               <CategoryStatusBadge
-                status={content.status}
+                isGenerating={isGenerating}
                 hasSelection={!!selected}
               />
               <ChevronRightIcon className="h-4 w-4 shrink-0 text-zinc-600" />
@@ -130,13 +133,13 @@ export function CategoryPanel({
 }
 
 function CategoryStatusBadge({
-  status,
+  isGenerating,
   hasSelection,
 }: {
-  status: CustomizationData["categories"][CustomizationCategory]["status"];
+  isGenerating: boolean;
   hasSelection: boolean;
 }) {
-  if (status === "generating") {
+  if (isGenerating) {
     return (
       <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-violet-400" />
     );
@@ -150,9 +153,5 @@ function CategoryStatusBadge({
     );
   }
 
-  if (status === "generated") {
-    return <span className="h-2 w-2 shrink-0 rounded-full bg-white/15" />;
-  }
-
-  return <span className="h-2 w-2 shrink-0 rounded-full bg-white/5" />;
+  return <span className="h-2 w-2 shrink-0 rounded-full bg-white/15" />;
 }

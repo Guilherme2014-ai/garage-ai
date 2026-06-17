@@ -76,7 +76,10 @@ export function useCustomization({
     return unsubscribe;
   }, [coordinator]);
 
+  // Force the first category to be active and generate its option previews
+  // up-front, so the user lands on a populated category.
   useEffect(() => {
+    setActiveCategory(CATEGORY_ORDER[0]);
     void coordinator.enterCategory(CATEGORY_ORDER[0]);
   }, [coordinator]);
 
@@ -99,24 +102,30 @@ export function useCustomization({
     [coordinator],
   );
 
+  // After navigating history the base image changes, so the active category's
+  // option previews are regenerated against the restored build.
   const goBack = useCallback(() => {
     coordinator.goBack();
-  }, [coordinator]);
+    void coordinator.enterCategory(activeCategory);
+  }, [activeCategory, coordinator]);
 
   const goForward = useCallback(() => {
     coordinator.goForward();
-  }, [coordinator]);
+    void coordinator.enterCategory(activeCategory);
+  }, [activeCategory, coordinator]);
 
   const restore = useCallback(
     (combinationString: string) => {
       coordinator.restore(combinationString);
+      void coordinator.enterCategory(activeCategory);
     },
-    [coordinator],
+    [activeCategory, coordinator],
   );
 
   const reset = useCallback(() => {
     coordinator.reset();
-  }, [coordinator]);
+    void coordinator.enterCategory(activeCategory);
+  }, [activeCategory, coordinator]);
 
   const save = useCallback(async () => {
     await coordinator.leaveCategory(activeCategory);

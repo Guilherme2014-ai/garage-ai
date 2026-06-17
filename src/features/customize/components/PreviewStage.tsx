@@ -164,7 +164,7 @@ function VersionHistory({
           const swatches = describeCombination(data, combinationString);
           return (
             <button
-              key={combinationString || "stock"}
+              key={`${index}:${combinationString || "stock"}`}
               type="button"
               onClick={() => onRestore(combinationString)}
               className={`group flex w-28 shrink-0 flex-col gap-2 rounded-xl border p-3 text-left transition ${

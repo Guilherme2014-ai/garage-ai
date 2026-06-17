@@ -1,12 +1,34 @@
-# Customization Logic
+# Customization Logic (Frontend)
 
-This document explains how the car customization flow works today, from the domain objects to the UI.
+This document explains how the car customization flow works today, from the
+domain objects to the UI. For the server side (API routes, AI providers, prompts,
+storage), see [`customization-backend.md`](./customization-backend.md).
 
-The implementation lives under `src/features/customize/` and is split into three layers:
+The implementation lives under `src/features/customize/` and is split into:
 
+- `api/customizeApi.ts`: thin client wrappers around the backend routes.
 - `core/customization-options/`: framework-independent customization logic.
 - `hooks/useCustomization.ts`: React bridge for the core coordinator.
-- `components/`: UI components for the customization workspace.
+- `components/`: UI components for the intake form and customization workspace.
+
+## End-to-End Flow
+
+```text
+Home (/) "Upload & Start Customizing"
+  -> /customize  ->  CustomizeFlow
+       1. CarIntakeForm: user provides car name/model + uploads a photo
+       2. uploadCarImage()        -> POST /api/customize/upload  -> base image URL
+       3. fetchCustomizationOptions() -> POST /api/customize/options -> LLM options
+       4. buildInitialDataFromOptions(options, baseImageUrl) -> CustomizationData
+       5. CustomizeWorkspace renders with that initial data
+```
+
+`CustomizeFlow` (`components/CustomizeFlow.tsx`) holds the gate: it shows
+`CarIntakeForm` until the initial data is ready, then swaps in
+`CustomizeWorkspace`.
+
+The categories requested from the LLM are exactly `CATEGORY_ORDER` (the six
+`CustomizationCategory` values), so the whole UI stays driven by that enum.
 
 ## Main Concepts
 
@@ -17,10 +39,9 @@ The implementation lives under `src/features/customize/` and is split into three
 It contains:
 
 - `selections`: the selected option slug per category.
-- `categories`: generated option content for each category.
-- `preview`: the generated vehicle preview for the current combination.
-
-The current shape is defined in `types/CustomizationData.ts`:
+- `categories`: the available options per category (each option can carry its own
+  generated preview image).
+- `preview`: the committed vehicle preview for the current combination.
 
 ```ts
 type CustomizationData = {
@@ -28,263 +49,209 @@ type CustomizationData = {
   categories: Record<CustomizationCategory, CustomizationCategoryContent>;
   preview: GeneratedPreview;
 };
+
+type CustomizationCategoryItem = {
+  slug: string;
+  name: string;
+  description: string;
+  price: number;
+  swatch: string;
+  /** Visual description sent to the edit route to build the prompt. */
+  visualDescription?: string;
+  /** The car image with THIS option applied (per-option preview). */
+  preview?: ItemPreview;
+};
+
+type ItemPreview = {
+  status: GenerationStatus; // "not-generated" | "generating" | "generated"
+  imageUrl: string | null;
+};
 ```
 
-Each category has a generation status:
+The key addition versus earlier versions is `ItemPreview`: every option holds its
+own preview image, generated up-front when its category is opened.
 
-- `not-generated`: content has not been requested yet.
-- `generating`: a mocked generation request is in progress.
-- `generated`: content is ready and can be reused.
+### Building the Initial Data
+
+`generation/buildInitialData.ts#buildInitialDataFromOptions()` maps the LLM
+`/api/customize/options` response into `CustomizationData`:
+
+- Every category is marked `generated` immediately (a single LLM call produced
+  all of them).
+- Each LLM option becomes a `CustomizationCategoryItem`:
+  - `slug`: slugified name (de-duplicated with an index suffix).
+  - `description`: `"{brand} · {description}"`.
+  - `price`: the LLM estimate (or `0`).
+  - `swatch`: the option's `colorHex`, else a deterministic color hashed from the
+    name (keeps the UI colorful when no real color applies).
+  - `visualDescription`: carried through for prompt building.
+- `preview.imageUrl` starts at the user's uploaded photo (the base build).
 
 ### Combination String
 
-A combination is represented by the selected option per category.
-
-Example:
+A combination is the selected option per category, serialized into a stable,
+order-independent string used as a cache key:
 
 ```ts
-{
-  wheels: "rays",
-  paint: "midnight",
-}
+{ wheels: "te37", paint: "midnight" }  ->  "paint__midnight|wheels__te37"
 ```
 
-The app serializes this into a stable combination string:
-
-```text
-paint__midnight|wheels__rays
-```
-
-The string is stable because entries are sorted before joining. That makes it safe to use as a cache key even if object key order changes.
-
-The helpers are:
-
-- `buildCombinationString()`
-- `parseCombinationString()`
+Entries are sorted before joining, so the string is stable regardless of object
+key order. Helpers: `buildCombinationString()` / `parseCombinationString()`.
 
 ### CombinationTracker
 
-`CombinationTracker` acts like a small version-control history for customization states.
+`CombinationTracker` is a small version-control history of combination strings:
 
-It stores:
+- ordered `history` + a `currentIndex` pointer.
+- `push()`, `back()`, `forward()`, `restore()`, `getHistory()`.
 
-- an ordered `history` of combination strings.
-- a `currentIndex` pointer to the active combination.
+Pushing from an older position discards forward history, mirroring a
+version-control branch.
 
-It supports:
+### Caches
 
-- `push()`: commit a new combination.
-- `back()`: move to the previous combination.
-- `forward()`: move to the next combination.
-- `restore()`: jump to an existing combination by string.
-- `getHistory()`: expose the ordered history for the UI.
+The coordinator keeps three in-memory caches (all reset on refresh):
 
-When `push()` is called from an older history position, forward history is discarded. This mirrors version-control behavior: making a new change after going back creates a new branch of history.
-
-### CombinationsStringCache
-
-`CombinationsStringCache` stores generated `CustomizationData` snapshots by combination string.
-
-Its job is to avoid expensive generation when the user returns to a combination that already exists.
-
-Flow:
-
-1. User selects an option.
-2. The new selections are converted to a combination string.
-3. The cache is checked.
-4. If a snapshot exists, it is restored immediately.
-5. If not, the preview is generated and the resulting snapshot is cached.
+- `CombinationsStringCache`: full `CustomizationData` snapshots keyed by
+  combination string. Restoring a known combination is instant.
+- `previewImageCache` (`Map<combinationString, imageUrl>`): the generated car
+  image for a specific combination, so any given option image is generated only
+  once and reused across categories and history.
+- `categoryPreviewBase` (`Map<category, baseString>`): the base combination each
+  category's option previews were last generated against, used to skip redundant
+  regeneration.
 
 ## Coordinator Flow
 
-`CustomizationDataCoordinator` is the central orchestrator.
+`CustomizationDataCoordinator` is the central orchestrator. It owns the tracker,
+the caches, the active `CustomizationData`, and a subscription system for React.
+The UI never touches the tracker/cache directly — it calls coordinator methods.
 
-It owns:
+The preview generator is **injected** (`CoordinatorDeps.generatePreview`) so the
+domain stays decoupled from the backend transport. `useCustomization` wires it to
+`editCarImage()` → `POST /api/customize/edit`.
 
-- `CombinationTracker`
-- `CombinationsStringCache`
-- the active `CustomizationData`
-- a small subscription system used by React
+```ts
+type PreviewGenerator = (params: {
+  currentImageUrl: string | null;
+  option: { name: string; visualDescription: string };
+}) => Promise<string>; // returns the new image URL
+```
 
-The UI does not manipulate the tracker or cache directly. It calls coordinator methods.
+### Base Image
 
-### Initialization
+The central idea: each option preview shows that option applied on top of the
+category's **base image** — the current build *without this category's own
+selection*. `resolveBaseImage()` finds it from `previewImageCache`, then the
+snapshot cache, then the initial image (for the stock base) or current image.
 
-The React hook creates a coordinator with `createInitialCustomizationData()`.
+This means switching options within a category always layers on the same base,
+instead of stacking option-on-option within the category.
 
-The initial state is the stock vehicle:
+### Entering a Category (per-option preview generation)
 
-- no selections
-- category content marked as `not-generated`
-- base preview marked as `generated`
+`enterCategory(category)` is where the heavy lifting happens:
 
-The coordinator immediately commits and caches the base combination (`""`).
+1. Compute `baseSelections` (current selections minus this category) and its
+   `baseString`; resolve the `baseImage`.
+2. If previews for this category were already generated against the same
+   `baseString` and all are `generated`, do nothing.
+3. Seed each option's `preview`: reuse a `previewImageCache` hit instantly
+   (`generated`); otherwise mark it `generating` and collect it as pending.
+4. Generate the pending previews in parallel via `runWithConcurrency(...,
+   PREVIEW_CONCURRENCY = 6, ...)`. Each result is written to
+   `previewImageCache` and onto the option's `preview`.
+5. If a generated option happens to be the option the user has already selected
+   (still waiting on its main image), `fillPendingMainPreview()` commits it.
 
-### Entering A Category
+`PREVIEW_CONCURRENCY` is only a client-side fan-out ceiling; the authoritative
+limit is enforced server-side (see the backend doc's concurrency section).
 
-When the user opens a category, `enterCategory(category)` runs.
+### Selecting an Option
 
-If the category content is already generated, nothing else happens.
+`selectOption(category, slug)` does **not** generate anything — previews already
+exist (or are in flight) from `enterCategory`:
 
-If it is not generated:
+1. Build the next `selections` and its combination string; exit early if
+   unchanged.
+2. Push the combination onto the tracker.
+3. If a full snapshot is cached, restore it instantly.
+4. Otherwise read the option's `preview`:
+   - if `generated`, commit its image as the main `preview`, cache the snapshot.
+   - if still `generating`, set the main preview to `generating` (showing the
+     previous image) — `fillPendingMainPreview()` commits it once it resolves.
 
-1. The category is set to `generating`.
-2. `generateCategoryContent()` is called.
-3. The returned options are stored in `CustomizationData.categories`.
-4. The current snapshot is cached.
+### Leaving a Category
 
-This is lazy generation: categories are only generated when the user visits them.
+`leaveCategory(category)` is a checkpoint: push the combination onto the tracker,
+cache the snapshot, call `persistSnapshot()` (currently a no-op — the backend
+persistence integration point), and notify subscribers.
 
-### Selecting An Option
+### History Restore
 
-When the user selects an option, `selectOption(category, slug)` runs.
-
-Flow:
-
-1. Build the next `selections` object.
-2. Serialize it into a combination string.
-3. If it matches the current combination, exit early.
-4. Push the new combination into `CombinationTracker`.
-5. Check `CombinationsStringCache`.
-6. If cached, restore the cached snapshot instantly.
-7. If not cached:
-   - mark `preview` as `generating`
-   - call `generateCombinationPreview()`
-   - store the generated preview
-   - cache the full snapshot
-
-This is where the system models incremental image editing. A new selection represents a new vehicle state, and the preview generation represents applying the latest modification on top of the existing build.
-
-### Leaving A Category
-
-When the user switches category or saves the build, `leaveCategory(category)` runs.
-
-It acts as a checkpoint:
-
-1. Commit the current selections to the tracker.
-2. Store the current snapshot in the cache.
-3. Call `persistSnapshot()`.
-4. Notify subscribers.
-
-`persistSnapshot()` is currently a mocked no-op. It is the future integration point for backend persistence.
-
-### Restoring History
-
-The UI can restore a previous combination through:
-
-- `goBack()`
-- `goForward()`
-- `restore(combinationString)`
-- `reset()`
-
-Restore flow:
-
-1. Move the tracker pointer.
-2. Build or receive the target combination string.
-3. Look up the snapshot in `CombinationsStringCache`.
-4. Restore the cached snapshot.
-
-If a snapshot is missing, the coordinator falls back to restoring selections only. This should not happen during the normal flow, because generated combinations are cached as they are created.
-
-## Mock Generation
-
-Mock generation lives in `generation/mockGeneration.ts`.
-
-There are two mocked calls:
-
-- `generateCategoryContent(category, selections)`
-- `generateCombinationPreview(selections)`
-
-Both simulate latency with `setTimeout` and return static data from the local catalog.
-
-These are the planned replacement points for real AI work:
-
-- `generateCategoryContent()` can become the category option generation pipeline.
-- `generateCombinationPreview()` can become the image editing pipeline that applies the latest modification to the current vehicle state.
+`goBack()` / `goForward()` / `restore(string)` / `reset()` move the tracker
+pointer and restore the cached snapshot. Because the base image changes when you
+move through history, `useCustomization` re-runs `enterCategory(activeCategory)`
+after each navigation so the visible category's option previews are regenerated
+against the restored build.
 
 ## React Hook
 
-`useCustomization()` is the React bridge.
+`useCustomization({ initialData })`:
 
-It:
-
-- creates one coordinator instance with `useRef`.
-- mirrors coordinator data into React state.
-- subscribes to coordinator updates.
-- enters the first category on mount.
-- exposes UI actions such as `selectCategory`, `selectOption`, `goBack`, `goForward`, `restore`, `reset`, and `save`.
-
-The hook keeps the UI simple. Components receive plain data and callbacks instead of knowing about the tracker/cache internals.
+- creates one coordinator instance (`useRef`), injecting the
+  `editCarImage`-backed preview generator.
+- mirrors coordinator data and nav state into React state via `subscribe`.
+- on mount, sets the first category active and calls `enterCategory` to populate
+  its previews.
+- exposes `selectCategory`, `selectOption`, `goBack`, `goForward`, `restore`,
+  `reset`, `save`, plus `data`, `activeCategory`, `nav`, and `isSaved`.
 
 ## UI Flow
 
-The `/customize` route renders `CustomizeWorkspace`.
+`/customize` renders `CustomizeFlow`, which renders either:
 
-The main UI pieces are:
-
-- `CategoryPanel`: category navigation, generation status, selected option summaries, save/reset buttons.
-- `PreviewStage`: generated preview area, loading overlay, undo/redo buttons, and version history.
-- `OptionsPanel`: active category options, loading skeletons, option selection.
-
-UI state comes from `useCustomization()`.
-
-User actions flow down into the coordinator:
+- `CarIntakeForm`: car name input + photo upload, with `uploading` /
+  `generating` progress and error states.
+- `CustomizeWorkspace`: the editor, composed of
+  - `CategoryPanel`: category nav, selected-option summaries, save/reset. Option
+    lookups use `findOptionInData()` (live LLM items, not the static catalog).
+  - `PreviewStage`: the committed main preview image (`data.preview.imageUrl`),
+    generating overlay, undo/redo, and version history (swatches resolved from
+    live data).
+  - `OptionsPanel`: option cards, each showing its own preview image (or a
+    stylized fallback + spinner while generating) and a `ready/total` counter.
 
 ```text
-User action
-  -> component callback
-  -> useCustomization()
-  -> CustomizationDataCoordinator
-  -> tracker/cache/generation
-  -> coordinator notifies subscribers
-  -> React state updates
-  -> UI re-renders
+User action -> component callback -> useCustomization()
+  -> CustomizationDataCoordinator -> tracker/caches/generatePreview
+  -> coordinator notifies subscribers -> React state -> UI re-renders
 ```
 
 ## Important Design Decisions
 
-### Category Options Are Lazy
-
-The app does not generate all categories upfront. A category is generated only when it is opened.
-
-This keeps startup fast and avoids paying generation cost for categories the user never visits.
-
-### Generated Snapshots Are Cached
-
-Combination previews are expensive, so generated snapshots are cached by combination string.
-
-Returning to a known combination restores the cached `CustomizationData` instantly.
-
-### Category Catalogs Are Reused Across Snapshots
-
-Category catalogs are treated as combination-independent in the current mock implementation.
-
-When a cached snapshot is restored, the coordinator merges in any already-generated category catalogs from the current session. This avoids unnecessary category regeneration when navigating history.
-
-### The Coordinator Owns The Source Of Truth
-
-The React hook mirrors state for rendering, but the coordinator owns the actual customization state and mutation rules.
-
-This keeps the business logic testable and independent from React.
+- **Options come from one LLM call.** All categories are generated up-front and
+  marked `generated`; the UI does not lazily fetch catalogs per category anymore.
+- **Previews are per-option and generated per category.** Opening a category
+  fans out one image edit per option (bounded concurrency), so each card is a
+  real "what your car would look like" preview.
+- **Everything cacheable is cached by combination string.** Option images
+  (`previewImageCache`) and full snapshots (`CombinationsStringCache`) are reused
+  across categories and history navigation.
+- **The coordinator owns the source of truth.** React only mirrors it, keeping
+  the domain logic testable and framework-independent.
+- **Option lookups are data-driven.** `findOptionInData()` reads the live
+  session items; the static `OPTION_CATALOG` is no longer the source for the
+  active build.
 
 ## Current Limitations
 
-- AI generation is mocked.
-- Snapshot persistence is a no-op.
-- Cached data is in-memory only and resets on refresh.
-- The generated preview is currently a stylized UI render, not a real generated image.
-- There are no automated tests for the coordinator yet.
-
-## Future Integration Points
-
-Recommended next steps:
-
-- Replace `generateCombinationPreview()` with the real AI image editing call.
-- Replace `generateCategoryContent()` with the real category generation/catalog service if needed.
-- Implement `persistSnapshot()` against a backend.
-- Add tests for:
-  - combination string serialization
-  - tracker history behavior
-  - cache restoration
-  - category enter/leave checkpoint flow
-  - coordinator restore/back/forward behavior
+- Snapshot persistence (`persistSnapshot()`) is still a no-op.
+- All caches are in-memory and reset on refresh.
+- Combination caching is order-independent, but AI edits are order-sensitive: the
+  first image generated for a given combination is reused even if a different
+  application order might look slightly different.
+- No automated tests for the coordinator yet (good candidates: combination string
+  serialization, tracker history, cache/preview reuse, enter/leave checkpoints,
+  restore/back/forward).

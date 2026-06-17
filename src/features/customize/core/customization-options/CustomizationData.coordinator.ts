@@ -3,8 +3,9 @@ import { CombinationsStringCache } from "./CombinationsStringCache";
 import type {
   CombinationSelections,
   CustomizationCategory,
-  CustomizationCategoryContent,
+  CustomizationCategoryItem,
   CustomizationData,
+  ItemPreview,
 } from "./types/CustomizationData";
 import { buildCombinationString } from "./utils/buildCombinationString";
 import { findOptionInData } from "./utils/findOptionInData";
@@ -12,9 +13,17 @@ import { findOptionInData } from "./utils/findOptionInData";
 type Listener = (data: CustomizationData) => void;
 
 /**
- * Produces the new car image URL for the just-selected option, applied on top
- * of the current car state. Injected so the domain stays decoupled from the
- * backend transport.
+ * Max option-preview requests this client fans out at once per category. The
+ * authoritative WaveSpeed limit is enforced server-side (see
+ * `wavespeed-concurrency.ts`, `WAVESPEED_CONCURRENCY_LENGHT`); this is just a
+ * client-side batching ceiling so a single session does not open an unbounded
+ * number of in-flight requests.
+ */
+const PREVIEW_CONCURRENCY = 6;
+
+/**
+ * Produces the car image URL for an option, applied on top of a base car image.
+ * Injected so the domain stays decoupled from the backend transport.
  */
 export type PreviewGenerator = (params: {
   currentImageUrl: string | null;
@@ -30,15 +39,39 @@ function cloneData(data: CustomizationData): CustomizationData {
 }
 
 /**
+ * Runs `task` over `items` with a bounded number of concurrent executions, so a
+ * category with many options does not fire every request at once.
+ */
+async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  let cursor = 0;
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (cursor < items.length) {
+        const item = items[cursor];
+        cursor += 1;
+        await task(item);
+      }
+    },
+  );
+  await Promise.all(workers);
+}
+
+/**
  * Orchestrates the customization flow by tying together three concerns:
  *
  * - {@link CombinationTracker}: version-control history of combinations.
  * - {@link CombinationsStringCache}: cache of generated snapshots per combination.
  * - the active {@link CustomizationData}: the working state surfaced to the UI.
  *
- * Generation is performed lazily: category catalogs are generated when a
- * category is entered, and vehicle previews are generated when a selection
- * changes (unless a cached snapshot already exists).
+ * Previews are generated at the category level: entering a category generates,
+ * in parallel, the preview for every option (each applied on top of the
+ * category's base image). Selecting an option then commits its already-generated
+ * preview, and leaving the category checkpoints the combination.
  */
 export class CustomizationDataCoordinator {
   private readonly tracker = new CombinationTracker<CustomizationCategory>();
@@ -47,11 +80,26 @@ export class CustomizationDataCoordinator {
   private listeners = new Set<Listener>();
   private readonly generatePreview: PreviewGenerator;
 
+  /** Per-combination image cache so an option image is generated only once. */
+  private readonly previewImageCache = new Map<string, string>();
+  /** Base combination string each category's previews were generated against. */
+  private readonly categoryPreviewBase = new Map<
+    CustomizationCategory,
+    string
+  >();
+  private readonly initialImageUrl: string | null;
+
   constructor(initialData: CustomizationData, deps: CoordinatorDeps) {
     this.data = initialData;
     this.generatePreview = deps.generatePreview;
+    this.initialImageUrl = initialData.preview.imageUrl;
     this.tracker.push(initialData.selections);
-    this.cache.set(this.currentCombinationString(), cloneData(initialData));
+
+    const initialString = this.currentCombinationString();
+    this.cache.set(initialString, cloneData(initialData));
+    if (initialData.preview.imageUrl) {
+      this.previewImageCache.set(initialString, initialData.preview.imageUrl);
+    }
   }
 
   // --- subscription -------------------------------------------------------
@@ -108,20 +156,85 @@ export class CustomizationDataCoordinator {
   // --- category lifecycle -------------------------------------------------
 
   /**
-   * Entering a category. Catalogs are produced up-front from the LLM and stored
-   * as `generated` in the initial data, so this is a no-op in the normal flow
-   * and exists to keep the category-navigation contract intact.
+   * Entering a category generates the preview for every option in parallel,
+   * each applied on top of the category's base image (the current build without
+   * this category's own selection). Previews already in the image cache are
+   * reused instantly; the rest are generated and cached.
    */
   public async enterCategory(category: CustomizationCategory): Promise<void> {
-    if (this.data.categories[category].status !== "generated") {
-      // Should not happen once initial data is built; keep the UI unblocked.
-      this.setData(
-        this.withCategory(category, {
-          status: "generated",
-          items: this.data.categories[category].items,
-        }),
-      );
+    const content = this.data.categories[category];
+    if (!content || content.items.length === 0) {
+      return;
     }
+
+    const baseSelections = this.withoutCategory(this.data.selections, category);
+    const baseString = buildCombinationString(baseSelections);
+    const baseImage = this.resolveBaseImage(baseString);
+
+    // Skip if previews are already generated against the same base image.
+    if (
+      this.categoryPreviewBase.get(category) === baseString &&
+      content.items.every((item) => item.preview?.status === "generated")
+    ) {
+      return;
+    }
+    this.categoryPreviewBase.set(category, baseString);
+
+    // Seed previews: reuse cached images instantly, mark the rest as pending.
+    const pending: CustomizationCategoryItem[] = [];
+    const seeded = content.items.map((item) => {
+      const combinationString = buildCombinationString({
+        ...baseSelections,
+        [category]: item.slug,
+      });
+      const cachedImage = this.previewImageCache.get(combinationString);
+      if (cachedImage) {
+        const preview: ItemPreview = {
+          status: "generated",
+          imageUrl: cachedImage,
+        };
+        return { ...item, preview };
+      }
+      pending.push(item);
+      const preview: ItemPreview = {
+        status: baseImage ? "generating" : "generated",
+        imageUrl: null,
+      };
+      return { ...item, preview };
+    });
+    this.setData(this.withCategoryItems(category, seeded));
+
+    if (!baseImage || pending.length === 0) {
+      return;
+    }
+
+    await runWithConcurrency(pending, PREVIEW_CONCURRENCY, async (item) => {
+      const combinationString = buildCombinationString({
+        ...baseSelections,
+        [category]: item.slug,
+      });
+      try {
+        const imageUrl = await this.generatePreview({
+          currentImageUrl: baseImage,
+          option: {
+            name: item.name,
+            visualDescription: item.visualDescription ?? "",
+          },
+        });
+        this.previewImageCache.set(combinationString, imageUrl);
+        this.setItemPreview(category, item.slug, {
+          status: "generated",
+          imageUrl,
+        });
+        this.fillPendingMainPreview(combinationString, imageUrl);
+      } catch (error) {
+        console.error("Failed to generate option preview:", error);
+        this.setItemPreview(category, item.slug, {
+          status: "generated",
+          imageUrl: null,
+        });
+      }
+    });
   }
 
   /**
@@ -139,10 +252,10 @@ export class CustomizationDataCoordinator {
   // --- selection ----------------------------------------------------------
 
   /**
-   * Selecting an option creates a new combination. If that combination was
-   * generated before, the cached snapshot is restored instantly; otherwise the
-   * selected option is applied on top of the current car image via the injected
-   * preview generator, and the new snapshot is cached.
+   * Selecting an option creates a new combination and commits the option's
+   * already-generated preview as the current build. No generation happens here:
+   * previews are produced at the category level when the category is entered.
+   * If the option's preview is still generating, it is filled in on completion.
    */
   public async selectOption(
     category: CustomizationCategory,
@@ -167,31 +280,17 @@ export class CustomizationDataCoordinator {
     }
 
     const option = findOptionInData(this.data, category, slug);
-    const currentImageUrl = this.data.preview.imageUrl;
+    const fallbackImage = this.data.preview.imageUrl;
+    const optionPreview = option?.preview;
 
-    // Keep the current image visible beneath the generating overlay.
-    this.setData({
-      ...this.data,
-      selections,
-      preview: {
-        status: "generating",
-        combinationString,
-        imageUrl: currentImageUrl,
-        renderedAt: null,
-      },
-    });
-
-    try {
-      const imageUrl = await this.generatePreview({
-        currentImageUrl,
-        option: {
-          name: option?.name ?? slug,
-          visualDescription: option?.visualDescription ?? "",
-        },
-      });
-
+    if (optionPreview?.status === "generated") {
+      const imageUrl = optionPreview.imageUrl ?? fallbackImage;
+      if (imageUrl) {
+        this.previewImageCache.set(combinationString, imageUrl);
+      }
       this.setData({
         ...this.data,
+        selections,
         preview: {
           status: "generated",
           combinationString,
@@ -200,19 +299,21 @@ export class CustomizationDataCoordinator {
         },
       });
       this.cache.set(combinationString, cloneData(this.data));
-    } catch (error) {
-      console.error("Failed to generate preview:", error);
-      // Revert to the previous image so the UI is not stuck generating.
-      this.setData({
-        ...this.data,
-        preview: {
-          status: "generated",
-          combinationString,
-          imageUrl: currentImageUrl,
-          renderedAt: Date.now(),
-        },
-      });
+      return;
     }
+
+    // The option's preview is still generating at the category level. Show the
+    // generating state; `fillPendingMainPreview` commits it once it resolves.
+    this.setData({
+      ...this.data,
+      selections,
+      preview: {
+        status: "generating",
+        combinationString,
+        imageUrl: fallbackImage,
+        renderedAt: null,
+      },
+    });
   }
 
   // --- navigation ---------------------------------------------------------
@@ -262,14 +363,78 @@ export class CustomizationDataCoordinator {
     this.setData({ ...this.data, selections: combination });
   }
 
-  private withCategory(
+  /** Returns a copy of the selections with the given category removed. */
+  private withoutCategory(
+    selections: CombinationSelections,
     category: CustomizationCategory,
-    content: CustomizationCategoryContent,
+  ): CombinationSelections {
+    const next = { ...selections };
+    delete next[category];
+    return next;
+  }
+
+  /**
+   * The image the category's option previews are layered on top of: the build
+   * without this category's selection. Resolved from the per-combination image
+   * cache, falling back to a cached snapshot, the initial image, or the current
+   * image.
+   */
+  private resolveBaseImage(baseString: string): string | null {
+    return (
+      this.previewImageCache.get(baseString) ??
+      this.cache.get(baseString)?.preview.imageUrl ??
+      (baseString === "" ? this.initialImageUrl : this.data.preview.imageUrl) ??
+      null
+    );
+  }
+
+  private withCategoryItems(
+    category: CustomizationCategory,
+    items: CustomizationCategoryItem[],
   ): CustomizationData {
     return {
       ...this.data,
-      categories: { ...this.data.categories, [category]: content },
+      categories: {
+        ...this.data.categories,
+        [category]: { ...this.data.categories[category], items },
+      },
     };
+  }
+
+  private setItemPreview(
+    category: CustomizationCategory,
+    slug: string,
+    preview: ItemPreview,
+  ): void {
+    const items = this.data.categories[category].items.map((item) =>
+      item.slug === slug ? { ...item, preview } : item,
+    );
+    this.setData(this.withCategoryItems(category, items));
+  }
+
+  /**
+   * When an option preview finishes generating and that option is the active
+   * (just-selected) combination still waiting on its image, commit it.
+   */
+  private fillPendingMainPreview(
+    combinationString: string,
+    imageUrl: string,
+  ): void {
+    if (
+      this.currentCombinationString() === combinationString &&
+      this.data.preview.status === "generating"
+    ) {
+      this.setData({
+        ...this.data,
+        preview: {
+          status: "generated",
+          combinationString,
+          imageUrl,
+          renderedAt: Date.now(),
+        },
+      });
+      this.cache.set(combinationString, cloneData(this.data));
+    }
   }
 
   /**
