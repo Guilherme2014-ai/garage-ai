@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  CATEGORY_ORDER,
-  createInitialCustomizationData,
-} from "../core/customization-options/catalog";
+import { editCarImage } from "../api/customizeApi";
 import { CustomizationDataCoordinator } from "../core/customization-options/CustomizationData.coordinator";
+import { CATEGORY_ORDER } from "../core/customization-options/catalog";
 import type {
   CustomizationCategory,
   CustomizationData,
@@ -33,14 +31,29 @@ function readNav(coordinator: CustomizationDataCoordinator): NavState {
  * Bridges the {@link CustomizationDataCoordinator} domain logic to React.
  *
  * The coordinator owns the source of truth; the hook mirrors its state and
- * exposes the category-flow and version-control actions to the UI.
+ * exposes the category-flow and version-control actions to the UI. Initial data
+ * is built from the LLM options response; selecting an option drives a real AI
+ * edit of the current car image via the customization edit route.
  */
-export function useCustomization() {
+export function useCustomization({
+  initialData,
+}: {
+  initialData: CustomizationData;
+}) {
   const coordinatorRef = useRef<CustomizationDataCoordinator | null>(null);
   if (coordinatorRef.current === null) {
-    coordinatorRef.current = new CustomizationDataCoordinator(
-      createInitialCustomizationData(),
-    );
+    coordinatorRef.current = new CustomizationDataCoordinator(initialData, {
+      generatePreview: async ({ currentImageUrl, option }) => {
+        if (!currentImageUrl) {
+          throw new Error("Missing current car image");
+        }
+        return editCarImage({
+          imageUrl: currentImageUrl,
+          name: option.name,
+          visualDescription: option.visualDescription,
+        });
+      },
+    });
   }
   const coordinator = coordinatorRef.current;
 

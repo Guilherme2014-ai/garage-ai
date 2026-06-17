@@ -3,12 +3,12 @@
 import {
   CATEGORY_META,
   CATEGORY_ORDER,
-  findOption,
 } from "../core/customization-options/catalog";
 import type {
   CustomizationCategory,
   CustomizationData,
 } from "../core/customization-options/types/CustomizationData";
+import { findOptionInData } from "../core/customization-options/utils/findOptionInData";
 import {
   ArrowLeftIcon,
   CATEGORY_ICONS,
@@ -42,7 +42,9 @@ export function CategoryPanel({
           <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-zinc-300">
             <ArrowLeftIcon className="h-4 w-4" />
           </span>
-          <span className="font-bold text-xl tracking-tight">Customization</span>
+          <span className="font-bold text-xl tracking-tight">
+            Customization
+          </span>
         </div>
         <p className="mt-1 ml-9 text-xs text-zinc-500">Make it yours ✨</p>
       </div>
@@ -53,7 +55,11 @@ export function CategoryPanel({
           const content = data.categories[category];
           const Icon = CATEGORY_ICONS[category];
           const isActive = category === activeCategory;
-          const selected = findOption(category, data.selections[category]);
+          const selected = findOptionInData(
+            data,
+            category,
+            data.selections[category],
+          );
 
           return (
             <button
@@ -81,7 +87,10 @@ export function CategoryPanel({
                   {selected ? selected.name : meta.tagline}
                 </span>
               </span>
-              <CategoryStatusBadge status={content.status} hasSelection={!!selected} />
+              <CategoryStatusBadge
+                status={content.status}
+                hasSelection={!!selected}
+              />
               <ChevronRightIcon className="h-4 w-4 shrink-0 text-zinc-600" />
             </button>
           );

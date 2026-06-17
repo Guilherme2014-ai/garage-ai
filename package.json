@@ -10,11 +10,13 @@
     "format": "biome format --write"
   },
   "dependencies": {
+    "@vercel/blob": "^2.4.0",
     "bcryptjs": "^3.0.3",
     "next": "^16.0.0",
     "next-auth": "^5.0.0-beta.31",
     "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react-dom": "19.2.7",
+    "wavespeed": "^0.2.4"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.2",

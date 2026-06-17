@@ -1,9 +1,5 @@
-import { CombinationsStringCache } from "./CombinationsStringCache";
 import { CombinationTracker } from "./Combination.tracker";
-import {
-  generateCategoryContent,
-  generateCombinationPreview,
-} from "./generation/mockGeneration";
+import { CombinationsStringCache } from "./CombinationsStringCache";
 import type {
   CombinationSelections,
   CustomizationCategory,
@@ -11,8 +7,23 @@ import type {
   CustomizationData,
 } from "./types/CustomizationData";
 import { buildCombinationString } from "./utils/buildCombinationString";
+import { findOptionInData } from "./utils/findOptionInData";
 
 type Listener = (data: CustomizationData) => void;
+
+/**
+ * Produces the new car image URL for the just-selected option, applied on top
+ * of the current car state. Injected so the domain stays decoupled from the
+ * backend transport.
+ */
+export type PreviewGenerator = (params: {
+  currentImageUrl: string | null;
+  option: { name: string; visualDescription: string };
+}) => Promise<string>;
+
+export interface CoordinatorDeps {
+  generatePreview: PreviewGenerator;
+}
 
 function cloneData(data: CustomizationData): CustomizationData {
   return structuredClone(data);
@@ -34,9 +45,11 @@ export class CustomizationDataCoordinator {
   private readonly cache = new CombinationsStringCache();
   private data: CustomizationData;
   private listeners = new Set<Listener>();
+  private readonly generatePreview: PreviewGenerator;
 
-  constructor(initialData: CustomizationData) {
+  constructor(initialData: CustomizationData, deps: CoordinatorDeps) {
     this.data = initialData;
+    this.generatePreview = deps.generatePreview;
     this.tracker.push(initialData.selections);
     this.cache.set(this.currentCombinationString(), cloneData(initialData));
   }
@@ -95,19 +108,20 @@ export class CustomizationDataCoordinator {
   // --- category lifecycle -------------------------------------------------
 
   /**
-   * Entering a category: display its content if already generated, otherwise
-   * generate it and store it in the current {@link CustomizationData}.
+   * Entering a category. Catalogs are produced up-front from the LLM and stored
+   * as `generated` in the initial data, so this is a no-op in the normal flow
+   * and exists to keep the category-navigation contract intact.
    */
   public async enterCategory(category: CustomizationCategory): Promise<void> {
-    if (this.data.categories[category].status === "generated") {
-      return;
+    if (this.data.categories[category].status !== "generated") {
+      // Should not happen once initial data is built; keep the UI unblocked.
+      this.setData(
+        this.withCategory(category, {
+          status: "generated",
+          items: this.data.categories[category].items,
+        }),
+      );
     }
-
-    this.setData(this.withCategory(category, { status: "generating", items: [] }));
-
-    const content = await generateCategoryContent(category, this.data.selections);
-    this.setData(this.withCategory(category, content));
-    this.cache.set(this.currentCombinationString(), cloneData(this.data));
   }
 
   /**
@@ -126,8 +140,9 @@ export class CustomizationDataCoordinator {
 
   /**
    * Selecting an option creates a new combination. If that combination was
-   * generated before, the cached snapshot is restored instantly; otherwise a
-   * new preview is generated and cached.
+   * generated before, the cached snapshot is restored instantly; otherwise the
+   * selected option is applied on top of the current car image via the injected
+   * preview generator, and the new snapshot is cached.
    */
   public async selectOption(
     category: CustomizationCategory,
@@ -151,20 +166,53 @@ export class CustomizationDataCoordinator {
       return;
     }
 
+    const option = findOptionInData(this.data, category, slug);
+    const currentImageUrl = this.data.preview.imageUrl;
+
+    // Keep the current image visible beneath the generating overlay.
     this.setData({
       ...this.data,
       selections,
       preview: {
         status: "generating",
         combinationString,
-        imageUrl: null,
+        imageUrl: currentImageUrl,
         renderedAt: null,
       },
     });
 
-    const preview = await generateCombinationPreview(selections);
-    this.setData({ ...this.data, preview });
-    this.cache.set(combinationString, cloneData(this.data));
+    try {
+      const imageUrl = await this.generatePreview({
+        currentImageUrl,
+        option: {
+          name: option?.name ?? slug,
+          visualDescription: option?.visualDescription ?? "",
+        },
+      });
+
+      this.setData({
+        ...this.data,
+        preview: {
+          status: "generated",
+          combinationString,
+          imageUrl,
+          renderedAt: Date.now(),
+        },
+      });
+      this.cache.set(combinationString, cloneData(this.data));
+    } catch (error) {
+      console.error("Failed to generate preview:", error);
+      // Revert to the previous image so the UI is not stuck generating.
+      this.setData({
+        ...this.data,
+        preview: {
+          status: "generated",
+          combinationString,
+          imageUrl: currentImageUrl,
+          renderedAt: Date.now(),
+        },
+      });
+    }
   }
 
   // --- navigation ---------------------------------------------------------
@@ -229,7 +277,9 @@ export class CustomizationDataCoordinator {
    * the cache reuses any catalog already generated in the current session
    * instead of forcing a regeneration.
    */
-  private mergeGeneratedCatalogs(snapshot: CustomizationData): CustomizationData {
+  private mergeGeneratedCatalogs(
+    snapshot: CustomizationData,
+  ): CustomizationData {
     const categories = { ...snapshot.categories };
 
     for (const key of Object.keys(this.data.categories) as Array<

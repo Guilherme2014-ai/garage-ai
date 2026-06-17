@@ -2,11 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import {
-  CATEGORY_ORDER,
-  findOption,
-} from "../core/customization-options/catalog";
-import type { CombinationSelections } from "../core/customization-options/types/CustomizationData";
+import { CATEGORY_ORDER } from "../core/customization-options/catalog";
+import type { CustomizationData } from "../core/customization-options/types/CustomizationData";
+import { findOptionInData } from "../core/customization-options/utils/findOptionInData";
 import { useCustomization } from "../hooks/useCustomization";
 import { CategoryPanel } from "./CategoryPanel";
 import {
@@ -25,7 +23,15 @@ import {
 import { OptionsPanel } from "./OptionsPanel";
 import { PreviewStage } from "./PreviewStage";
 
-export function CustomizeWorkspace() {
+type CustomizeWorkspaceProps = {
+  initialData: CustomizationData;
+  carName: string;
+};
+
+export function CustomizeWorkspace({
+  initialData,
+  carName,
+}: CustomizeWorkspaceProps) {
   const {
     data,
     activeCategory,
@@ -38,9 +44,9 @@ export function CustomizeWorkspace() {
     restore,
     reset,
     save,
-  } = useCustomization();
+  } = useCustomization({ initialData });
 
-  const summary = buildSummary(data.selections);
+  const summary = buildSummary(data);
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#07060d] text-zinc-100">
@@ -55,7 +61,7 @@ export function CustomizeWorkspace() {
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <TopBar isSaved={isSaved} />
+        <TopBar isSaved={isSaved} carName={carName} />
 
         <div className="flex-1 overflow-y-auto px-6 pb-4">
           <PreviewStage
@@ -147,12 +153,12 @@ function IconRail() {
   );
 }
 
-function TopBar({ isSaved }: { isSaved: boolean }) {
+function TopBar({ isSaved, carName }: { isSaved: boolean; carName: string }) {
   return (
     <header className="flex items-center justify-between px-6 py-4">
       <div className="flex items-center gap-3">
         <span className="flex items-center gap-2 font-semibold text-lg">
-          My Build
+          {carName || "My Build"}
           <ChevronDownIcon className="h-4 w-4 text-zinc-500" />
         </span>
         {isSaved ? (
@@ -214,7 +220,7 @@ function BuildSummaryBar({ count, total }: { count: number; total: number }) {
   );
 }
 
-function buildSummary(selections: CombinationSelections): {
+function buildSummary(data: CustomizationData): {
   count: number;
   total: number;
 } {
@@ -222,7 +228,7 @@ function buildSummary(selections: CombinationSelections): {
   let total = 0;
 
   for (const category of CATEGORY_ORDER) {
-    const option = findOption(category, selections[category]);
+    const option = findOptionInData(data, category, data.selections[category]);
     if (option) {
       count += 1;
       total += option.price;

@@ -1,6 +1,6 @@
 import {
-  type CustomizationCategoryContent,
   CustomizationCategory,
+  type CustomizationCategoryContent,
   type CustomizationCategoryItem,
   type CustomizationData,
 } from "./types/CustomizationData";

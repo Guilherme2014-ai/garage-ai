@@ -171,7 +171,7 @@ function Hero() {
             <p className="text-xs text-zinc-500">JPG, PNG up to 20MB</p>
           </div>
           <Link
-            href="/auth/signup"
+            href="/customize"
             className="group mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-blue-500 px-4 py-2.5 font-medium text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90"
           >
             Upload &amp; Start Customizing

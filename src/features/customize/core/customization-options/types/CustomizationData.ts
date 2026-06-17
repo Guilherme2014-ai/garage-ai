@@ -21,6 +21,11 @@ export type CustomizationCategoryItem = {
   price: number;
   /** Representative color used to render mock previews/swatches. */
   swatch: string;
+  /**
+   * Visual description of the installed part. Sent to the car image
+   * modification route to build the edit prompt for this option.
+   */
+  visualDescription?: string;
   /** Reserved for the real AI-generated option asset. */
   banner?: string;
 };
@@ -32,7 +37,9 @@ export type CustomizationCategoryContent = {
 };
 
 /** A category-to-selected-option-slug map describing a single combination. */
-export type CombinationSelections = Partial<Record<CustomizationCategory, string>>;
+export type CombinationSelections = Partial<
+  Record<CustomizationCategory, string>
+>;
 
 /**
  * The generated vehicle preview for the current combination. The latest

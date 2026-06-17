@@ -1,5 +1,5 @@
-import { CustomizeWorkspace } from "@/features/customize";
+import { CustomizeFlow } from "@/features/customize";
 
 export default function CustomizePage() {
-  return <CustomizeWorkspace />;
+  return <CustomizeFlow />;
 }
