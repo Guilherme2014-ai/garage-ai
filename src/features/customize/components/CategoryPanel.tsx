@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   CATEGORY_META,
   CATEGORY_ORDER,
@@ -36,12 +37,16 @@ export function CategoryPanel({
   onReset,
 }: CategoryPanelProps) {
   return (
-    <aside className="flex w-80 flex-col border-white/5 border-r bg-[#0a0912]">
+    <aside className="hidden w-80 shrink-0 flex-col border-white/5 border-r bg-[#0a0912] lg:flex">
       <div className="px-5 pt-5">
         <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-zinc-300">
+          <Link
+            href="/"
+            aria-label="Back to home"
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-zinc-300 transition hover:bg-white/10 hover:text-white"
+          >
             <ArrowLeftIcon className="h-4 w-4" />
-          </span>
+          </Link>
           <span className="font-bold text-xl tracking-tight">
             Customization
           </span>

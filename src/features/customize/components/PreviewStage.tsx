@@ -22,7 +22,12 @@ type PreviewStageProps = {
   onForward: () => void;
 };
 
-export function PreviewStage({ data, nav, onBack, onForward }: PreviewStageProps) {
+export function PreviewStage({
+  data,
+  nav,
+  onBack,
+  onForward,
+}: PreviewStageProps) {
   const isGenerating = data.preview.status === "generating";
   const paint = findOptionInData(
     data,
@@ -34,7 +39,7 @@ export function PreviewStage({ data, nav, onBack, onForward }: PreviewStageProps
   const imageUrl = data.preview.imageUrl;
 
   return (
-    <div className="relative mx-auto aspect-[16/9] w-full max-w-xl overflow-hidden rounded-2xl border border-white/10">
+    <div className="relative mx-auto mt-4 aspect-[16/9] w-full max-w-2xl overflow-hidden rounded-2xl border border-white/10 sm:mt-6">
       <div
         className="absolute inset-0"
         style={{

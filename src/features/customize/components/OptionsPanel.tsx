@@ -32,7 +32,7 @@ export function OptionsPanel({
   );
 
   return (
-    <section className="mt-6 rounded-2xl border border-white/5 bg-white/[0.02] p-5">
+    <section className="mt-6 rounded-2xl border border-white/5 bg-white/[0.02] p-4 sm:p-5">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-semibold text-lg">{meta.label}</h2>
@@ -76,7 +76,7 @@ function OptionCard({
     <button
       type="button"
       onClick={onSelect}
-      className={`flex w-52 shrink-0 snap-start flex-col rounded-xl border p-3 text-left transition ${
+      className={`flex w-44 shrink-0 snap-start flex-col rounded-xl border p-3 text-left transition sm:w-52 ${
         isSelected
           ? "border-violet-500/60 bg-violet-500/10"
           : "border-white/10 bg-[#0d0b16] hover:border-white/20"

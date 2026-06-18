@@ -5,7 +5,6 @@ import { generateMockOptions } from "./mockOptions";
 import {
   buildSystemPrompt,
   buildUserPrompt,
-  CATEGORIES_COUNT,
   OPTIONS_COUNT_PER_CATEGORY,
 } from "./promptBuilder";
 import type {
@@ -42,10 +41,6 @@ function normalizeInput(
 
   if (categories.length === 0) {
     throw new ValidationError("At least one category is required");
-  }
-
-  if (categories.length !== CATEGORIES_COUNT) {
-    throw new ValidationError(`Exactly ${CATEGORIES_COUNT} categories are required`);
   }
 
   return { car, categories };

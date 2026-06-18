@@ -1,25 +1,23 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
-import { CATEGORY_ORDER } from "../core/customization-options/catalog";
-import type { CustomizationData } from "../core/customization-options/types/CustomizationData";
+import { useState } from "react";
+import {
+  CATEGORY_META,
+  CATEGORY_ORDER,
+} from "../core/customization-options/catalog";
+import type {
+  CustomizationCategory,
+  CustomizationData,
+} from "../core/customization-options/types/CustomizationData";
 import { findOptionInData } from "../core/customization-options/utils/findOptionInData";
 import { useCustomization } from "../hooks/useCustomization";
+import { downloadImage } from "../utils/downloadImage";
+import { BuildSummarySheet } from "./BuildSummarySheet";
 import { CategoryPanel } from "./CategoryPanel";
-import {
-  ArrowRightIcon,
-  BookmarkIcon,
-  CheckIcon,
-  ChevronDownIcon,
-  CompareIcon,
-  DownloadIcon,
-  HomeIcon,
-  ImageIcon,
-  SettingsIcon,
-  TargetIcon,
-  UserIcon,
-} from "./icons";
+import { CompareDialog } from "./CompareDialog";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { ArrowRightIcon, CheckIcon, CompareIcon, DownloadIcon } from "./icons";
+import { MobileCategoryTabs } from "./MobileCategoryTabs";
 import { OptionsPanel } from "./OptionsPanel";
 import { PreviewStage } from "./PreviewStage";
 
@@ -45,24 +43,91 @@ export function CustomizeWorkspace({
     save,
   } = useCustomization({ initialData });
 
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [pendingCategory, setPendingCategory] =
+    useState<CustomizationCategory | null>(null);
+  const [dontAskAgain, setDontAskAgain] = useState(false);
+  const [skipSwitchConfirm, setSkipSwitchConfirm] = useState(false);
+
+  // Switching category checkpoints the build, so always confirm first (unless
+  // the user opted out for the session).
+  function requestSelectCategory(category: CustomizationCategory) {
+    if (category === activeCategory) {
+      return;
+    }
+    if (skipSwitchConfirm) {
+      void selectCategory(category);
+      return;
+    }
+    setDontAskAgain(false);
+    setPendingCategory(category);
+  }
+
+  function confirmCategorySwitch() {
+    if (dontAskAgain) {
+      setSkipSwitchConfirm(true);
+    }
+    if (pendingCategory) {
+      void selectCategory(pendingCategory);
+    }
+    setPendingCategory(null);
+  }
+
+  const activeMeta = CATEGORY_META[activeCategory];
+  const pendingMeta = pendingCategory ? CATEGORY_META[pendingCategory] : null;
+
   const summary = buildSummary(data);
+  const baseImageUrl = initialData.preview.imageUrl;
+  const previewUrl = data.preview.imageUrl;
+  const isGenerating = data.preview.status === "generating";
+
+  const canDownload = !!previewUrl && !isGenerating;
+  const canCompare =
+    !!previewUrl && !!baseImageUrl && summary.count > 0 && !isGenerating;
+
+  async function handleDownload() {
+    if (!previewUrl) {
+      return;
+    }
+    setIsDownloading(true);
+    try {
+      await downloadImage(previewUrl, buildFileName(carName));
+    } finally {
+      setIsDownloading(false);
+    }
+  }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#07060d] text-zinc-100">
-      <IconRail />
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#07060d] text-zinc-100 lg:flex-row">
       <CategoryPanel
         data={data}
         activeCategory={activeCategory}
         isSaved={isSaved}
-        onSelectCategory={selectCategory}
+        onSelectCategory={requestSelectCategory}
         onSave={save}
         onReset={reset}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <TopBar isSaved={isSaved} carName={carName} />
+        <TopBar
+          isSaved={isSaved}
+          carName={carName}
+          canCompare={canCompare}
+          canDownload={canDownload}
+          isDownloading={isDownloading}
+          onCompare={() => setCompareOpen(true)}
+          onDownload={handleDownload}
+        />
 
-        <div className="flex-1 overflow-y-auto px-6 pb-4">
+        <MobileCategoryTabs
+          data={data}
+          activeCategory={activeCategory}
+          onSelectCategory={requestSelectCategory}
+        />
+
+        <div className="flex-1 overflow-y-auto px-4 pb-4 sm:px-6">
           <PreviewStage
             data={data}
             nav={nav}
@@ -76,144 +141,159 @@ export function CustomizeWorkspace({
           />
         </div>
 
-        <BuildSummaryBar count={summary.count} total={summary.total} />
+        <BuildSummaryBar
+          count={summary.count}
+          total={summary.total}
+          onViewBuild={() => setSummaryOpen(true)}
+        />
       </main>
+
+      {baseImageUrl && previewUrl && (
+        <CompareDialog
+          open={compareOpen}
+          beforeUrl={baseImageUrl}
+          afterUrl={previewUrl}
+          modCount={summary.count}
+          onClose={() => setCompareOpen(false)}
+        />
+      )}
+
+      <BuildSummarySheet
+        open={summaryOpen}
+        data={data}
+        carName={carName}
+        count={summary.count}
+        total={summary.total}
+        canDownload={canDownload}
+        isDownloading={isDownloading}
+        isSaved={isSaved}
+        onDownload={handleDownload}
+        onSave={save}
+        onReset={reset}
+        onClose={() => setSummaryOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={pendingCategory !== null}
+        title="Switch category?"
+        message={
+          <>
+            You're moving from{" "}
+            <span className="text-zinc-200">{activeMeta.label}</span>
+            {pendingMeta ? (
+              <>
+                {" "}
+                to <span className="text-zinc-200">{pendingMeta.label}</span>
+              </>
+            ) : null}
+            . Your build is saved automatically, so you can come back and change
+            it anytime.
+          </>
+        }
+        confirmLabel="Continue"
+        cancelLabel="Stay here"
+        checkbox={{
+          label: "Don't ask again this session",
+          checked: dontAskAgain,
+          onChange: setDontAskAgain,
+        }}
+        onConfirm={confirmCategorySwitch}
+        onCancel={() => setPendingCategory(null)}
+      />
     </div>
   );
 }
 
-function IconRail() {
-  const items = [
-    { icon: HomeIcon, label: "Home", href: "/" },
-    { icon: ImageIcon, label: "Gallery" },
-    { icon: UserIcon, label: "Community" },
-    { icon: TargetIcon, label: "Discover" },
-    { icon: DownloadIcon, label: "Saved" },
-    { icon: BookmarkIcon, label: "Bookmarks" },
-  ];
-
+function TopBar({
+  isSaved,
+  carName,
+  canCompare,
+  canDownload,
+  isDownloading,
+  onCompare,
+  onDownload,
+}: {
+  isSaved: boolean;
+  carName: string;
+  canCompare: boolean;
+  canDownload: boolean;
+  isDownloading: boolean;
+  onCompare: () => void;
+  onDownload: () => void;
+}) {
   return (
-    <aside className="flex w-16 flex-col items-center justify-between border-white/5 border-r bg-[#0a0912] py-4">
-      <div className="flex flex-col items-center gap-6">
-        <Link href="/" aria-label="Garage AI home">
-          <Image
-            src="/assets/logo-01.png"
-            alt="Garage AI"
-            width={36}
-            height={36}
-            className="h-9 w-9"
-          />
-        </Link>
-        <nav className="flex flex-col items-center gap-2">
-          {items.map((item, index) => {
-            const Icon = item.icon;
-            const className = `flex h-10 w-10 items-center justify-center rounded-xl transition ${
-              index === 0
-                ? "bg-violet-500/15 text-violet-300"
-                : "text-zinc-500 hover:bg-white/5 hover:text-white"
-            }`;
-            return item.href ? (
-              <Link
-                key={item.label}
-                href={item.href}
-                aria-label={item.label}
-                className={className}
-              >
-                <Icon className="h-5 w-5" />
-              </Link>
-            ) : (
-              <button
-                key={item.label}
-                type="button"
-                aria-label={item.label}
-                className={className}
-              >
-                <Icon className="h-5 w-5" />
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      <div className="flex flex-col items-center gap-4">
-        <button
-          type="button"
-          aria-label="Settings"
-          className="flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-white/5 hover:text-white"
-        >
-          <SettingsIcon className="h-5 w-5" />
-        </button>
-        <span className="relative h-9 w-9 rounded-full bg-gradient-to-br from-violet-500 to-blue-500">
-          <span className="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full border-2 border-[#0a0912] bg-emerald-400" />
-        </span>
-      </div>
-    </aside>
-  );
-}
-
-function TopBar({ isSaved, carName }: { isSaved: boolean; carName: string }) {
-  return (
-    <header className="flex items-center justify-between px-6 py-4">
-      <div className="flex items-center gap-3">
-        <span className="flex items-center gap-2 font-semibold text-lg">
+    <header className="flex items-center justify-between gap-3 border-white/5 border-b px-4 py-3 sm:px-6 sm:py-4 lg:border-b-0">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="truncate font-semibold text-base sm:text-lg">
           {carName || "My Build"}
-          <ChevronDownIcon className="h-4 w-4 text-zinc-500" />
         </span>
         {isSaved ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 font-medium text-emerald-400 text-xs">
+          <span className="hidden items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 font-medium text-emerald-400 text-xs sm:inline-flex">
             <CheckIcon className="h-3 w-3" />
             Saved
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 font-medium text-amber-400 text-xs">
+          <span className="hidden items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 font-medium text-amber-400 text-xs sm:inline-flex">
             Unsaved changes
           </span>
         )}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
-          className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 font-medium text-sm text-zinc-300 transition hover:bg-white/10"
+          onClick={onCompare}
+          disabled={!canCompare}
+          className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-sm text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
         >
           <CompareIcon className="h-4 w-4" />
-          Compare
+          <span className="hidden sm:inline">Compare</span>
         </button>
         <button
           type="button"
-          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-blue-500 px-4 py-2 font-medium text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90"
+          onClick={onDownload}
+          disabled={!canDownload || isDownloading}
+          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-blue-500 px-3 py-2 font-medium text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4"
         >
-          <DownloadIcon className="h-4 w-4" />
-          Download
-          <ArrowRightIcon className="h-4 w-4" />
+          {isDownloading ? (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          ) : (
+            <DownloadIcon className="h-4 w-4" />
+          )}
+          <span className="hidden sm:inline">
+            {isDownloading ? "Preparing…" : "Download"}
+          </span>
         </button>
       </div>
     </header>
   );
 }
 
-function BuildSummaryBar({ count, total }: { count: number; total: number }) {
+function BuildSummaryBar({
+  count,
+  total,
+  onViewBuild,
+}: {
+  count: number;
+  total: number;
+  onViewBuild: () => void;
+}) {
   return (
-    <footer className="flex items-center justify-between gap-4 border-white/5 border-t bg-[#0a0912] px-6 py-4">
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-semibold">Build Summary</span>
-        <span className="text-violet-400">
-          {count} {count === 1 ? "Item" : "Items"} Added
+    <footer className="flex items-center justify-between gap-4 border-white/5 border-t bg-[#0a0912] px-4 py-3 sm:px-6 sm:py-4">
+      <div className="flex min-w-0 flex-col">
+        <span className="font-semibold text-sm">Build Summary</span>
+        <span className="text-violet-400 text-xs">
+          {count} {count === 1 ? "Item" : "Items"} · ${total.toLocaleString()}
         </span>
       </div>
-      <div className="flex items-center gap-5">
-        <div className="text-right">
-          <p className="text-[11px] text-zinc-500">Estimated Total</p>
-          <p className="font-bold text-xl">${total.toLocaleString()}</p>
-        </div>
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-500 px-6 py-3 font-medium text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90"
-        >
-          View Build
-          <ArrowRightIcon className="h-4 w-4" />
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={onViewBuild}
+        className="flex shrink-0 items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-500 px-5 py-2.5 font-medium text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90 sm:px-6 sm:py-3"
+      >
+        View Build
+        <ArrowRightIcon className="h-4 w-4" />
+      </button>
     </footer>
   );
 }
@@ -234,4 +314,13 @@ function buildSummary(data: CustomizationData): {
   }
 
   return { count, total };
+}
+
+function buildFileName(carName: string): string {
+  const base = carName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-");
+  const trimmed = base.replace(/^-+|-+$/g, "");
+  return `${trimmed || "garage-ai-build"}.png`;
 }
