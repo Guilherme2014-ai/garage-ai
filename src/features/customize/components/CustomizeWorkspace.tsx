@@ -41,7 +41,6 @@ export function CustomizeWorkspace({
     selectOption,
     goBack,
     goForward,
-    restore,
     reset,
     save,
   } = useCustomization({ initialData });
@@ -69,7 +68,6 @@ export function CustomizeWorkspace({
             nav={nav}
             onBack={goBack}
             onForward={goForward}
-            onRestore={restore}
           />
           <OptionsPanel
             data={data}

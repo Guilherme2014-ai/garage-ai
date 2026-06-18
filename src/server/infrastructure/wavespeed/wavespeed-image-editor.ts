@@ -7,7 +7,7 @@ export interface EditImageOptions {
   prompt: string;
   imageUrls: string[];
   outputFormat?: "png" | "jpeg" | "webp";
-  resolution?: "1k" | "2k" | "4k";
+  resolution?: "0.5k" | "1k" | "2k" | "4k";
 }
 
 /**
@@ -19,7 +19,7 @@ export async function editImage({
   prompt,
   imageUrls,
   outputFormat = "png",
-  resolution = "1k",
+  resolution = "0.5k",
 }: EditImageOptions): Promise<string> {
   const client = new Client();
 

@@ -17,3 +17,27 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Slim, themed scrollbar for horizontal option rails and side panels. */
+.slim-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 92, 246, 0.4) transparent;
+}
+
+.slim-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.slim-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.slim-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+
+.slim-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.45);
+}

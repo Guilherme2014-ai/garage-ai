@@ -46,7 +46,7 @@ export function OptionsPanel({
         )}
       </div>
 
-      <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
+      <div className="slim-scrollbar -mx-1 mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-1 px-1 pb-3">
         {content.items.map((item) => (
           <OptionCard
             key={item.slug}
@@ -76,7 +76,7 @@ function OptionCard({
     <button
       type="button"
       onClick={onSelect}
-      className={`flex w-52 shrink-0 flex-col rounded-xl border p-3 text-left transition ${
+      className={`flex w-52 shrink-0 snap-start flex-col rounded-xl border p-3 text-left transition ${
         isSelected
           ? "border-violet-500/60 bg-violet-500/10"
           : "border-white/10 bg-[#0d0b16] hover:border-white/20"

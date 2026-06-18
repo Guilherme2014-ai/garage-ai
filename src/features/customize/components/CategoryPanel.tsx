@@ -49,7 +49,7 @@ export function CategoryPanel({
         <p className="mt-1 ml-9 text-xs text-zinc-500">Make it yours ✨</p>
       </div>
 
-      <div className="mt-4 flex-1 space-y-1.5 overflow-y-auto px-4 pb-4">
+      <div className="slim-scrollbar mt-4 flex-1 space-y-1.5 overflow-y-auto px-4 pb-4">
         {CATEGORY_ORDER.map((category) => {
           const meta = CATEGORY_META[category];
           const content = data.categories[category];

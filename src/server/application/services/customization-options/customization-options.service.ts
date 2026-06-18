@@ -1,10 +1,12 @@
+import { isMockAiEnabled } from "@/server/config/ai-mock";
 import { ValidationError } from "@/server/domain/errors";
 import { generateText } from "@/server/infrastructure/wavespeed/wavespeed-llm";
+import { generateMockOptions } from "./mockOptions";
 import {
   buildSystemPrompt,
   buildUserPrompt,
-  MAX_OPTIONS_PER_CATEGORY,
-  MIN_OPTIONS_PER_CATEGORY,
+  CATEGORIES_COUNT,
+  OPTIONS_COUNT_PER_CATEGORY,
 } from "./promptBuilder";
 import type {
   CustomizationOption,
@@ -13,7 +15,6 @@ import type {
   VehicleProfile,
 } from "./types";
 
-const MAX_CATEGORIES = 20;
 const LLM_MODEL = "openai/gpt-5-chat";
 const LLM_MAX_TOKENS = 8000;
 const LLM_TEMPERATURE = 0.7;
@@ -43,10 +44,8 @@ function normalizeInput(
     throw new ValidationError("At least one category is required");
   }
 
-  if (categories.length > MAX_CATEGORIES) {
-    throw new ValidationError(
-      `A maximum of ${MAX_CATEGORIES} categories is supported`,
-    );
+  if (categories.length !== CATEGORIES_COUNT) {
+    throw new ValidationError(`Exactly ${CATEGORIES_COUNT} categories are required`);
   }
 
   return { car, categories };
@@ -141,15 +140,15 @@ function buildResult(
       .filter((option) => option.name && option.brand)
       .sort((a, b) => a.rank - b.rank);
 
-    if (options.length < MIN_OPTIONS_PER_CATEGORY) {
+    if (options.length !== OPTIONS_COUNT_PER_CATEGORY) {
       throw new Error(
-        `LLM returned fewer than ${MIN_OPTIONS_PER_CATEGORY} valid options for "${category}"`,
+        `LLM did not generate exactly ${OPTIONS_COUNT_PER_CATEGORY} valid options for "${category}"`,
       );
     }
 
-    // Keep at most MAX options, then normalize ranks to the final order.
+    // Keep at most OPTIONS_COUNT_PER_CATEGORY options, then normalize ranks to the final order.
     categories[category] = options
-      .slice(0, MAX_OPTIONS_PER_CATEGORY)
+      .slice(0, OPTIONS_COUNT_PER_CATEGORY)
       .map((option, index) => ({ ...option, rank: index + 1 }));
   }
 
@@ -170,6 +169,10 @@ export const customizationOptionsService = {
     rawInput: GenerateCustomizationOptionsInput,
   ): Promise<CustomizationOptionsResult> {
     const input = normalizeInput(rawInput);
+
+    if (isMockAiEnabled()) {
+      return generateMockOptions(input);
+    }
 
     const completion = await generateText({
       prompt: buildUserPrompt(input),

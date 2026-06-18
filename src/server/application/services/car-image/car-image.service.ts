@@ -1,3 +1,4 @@
+import { isMockAiEnabled } from "@/server/config/ai-mock";
 import { ValidationError } from "@/server/domain/errors";
 import { uploadToBlob } from "@/server/infrastructure/storage/blob-storage";
 import {
@@ -5,6 +6,7 @@ import {
   editImage,
 } from "@/server/infrastructure/wavespeed/wavespeed-image-editor";
 import { buildCarEditPrompt } from "./editPromptBuilder";
+import { generateMockEdit } from "./mockCarImage";
 
 const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
@@ -105,6 +107,10 @@ export const carImageService = {
     const name = input.name?.trim();
     if (!name) {
       throw new ValidationError("An equipment name is required");
+    }
+
+    if (isMockAiEnabled()) {
+      return generateMockEdit(input);
     }
 
     const { url: sourceUrl, cleanup } = await resolveSourceUrl(input);
