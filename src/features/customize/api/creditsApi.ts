@@ -55,12 +55,19 @@ export async function chargeCategory(): Promise<ChargeResult> {
   return { ok: false, insufficient: response.status === 402 };
 }
 
-/** Starts checkout for a pack and returns the Stripe-hosted URL. */
-export async function startCreditCheckout(pack: CreditPackId): Promise<string> {
+/**
+ * Starts checkout for a pack and returns the Stripe-hosted URL. The optional
+ * `buildId` is round-tripped into the success/cancel redirect so the user lands
+ * back on the same build session after paying.
+ */
+export async function startCreditCheckout(
+  pack: CreditPackId,
+  buildId?: string,
+): Promise<string> {
   const response = await fetch("/api/stripe/checkout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pack }),
+    body: JSON.stringify({ pack, buildId }),
   });
   const data = await unwrap<{ url: string }>(response);
   return data.url;

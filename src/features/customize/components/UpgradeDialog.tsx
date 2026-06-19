@@ -11,6 +11,11 @@ import { CheckIcon, SparkleIcon, XIcon } from "./icons";
 
 type UpgradeDialogProps = {
   open: boolean;
+  /**
+   * Current build id, round-tripped through checkout to resume the session.
+   * Absent on the settings page, where there is no active build.
+   */
+  buildId?: string | null;
   onClose: () => void;
 };
 
@@ -36,7 +41,7 @@ const BENEFITS = [
  * in-progress build is preserved; the workspace refreshes the balance when the
  * user returns.
  */
-export function UpgradeDialog({ open, onClose }: UpgradeDialogProps) {
+export function UpgradeDialog({ open, buildId, onClose }: UpgradeDialogProps) {
   const [pending, setPending] = useState<CreditPackId | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,7 +66,7 @@ export function UpgradeDialog({ open, onClose }: UpgradeDialogProps) {
     setError(null);
     setPending(pack);
     try {
-      const url = await startCreditCheckout(pack);
+      const url = await startCreditCheckout(pack, buildId ?? undefined);
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (err) {
       setError(

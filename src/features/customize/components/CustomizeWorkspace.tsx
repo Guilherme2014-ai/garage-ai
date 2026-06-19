@@ -7,6 +7,7 @@ import {
   CATEGORY_META,
   CATEGORY_ORDER,
 } from "../core/customization-options/catalog";
+import type { BuildSnapshot } from "../core/customization-options/types/BuildSnapshot";
 import type {
   CustomizationCategory,
   CustomizationData,
@@ -33,7 +34,13 @@ import { UpgradeDialog } from "./UpgradeDialog";
 
 type CustomizeWorkspaceProps = {
   initialData: CustomizationData;
+  /** Full serialized session when resuming a saved build. */
+  initialSnapshot?: BuildSnapshot;
+  /** Build id when resuming a saved build. */
+  initialBuildId?: string;
   carName: string;
+  /** The stock (uploaded) car image, used as the compare baseline + build base. */
+  baseImageUrl: string;
   planMode: PlanMode;
   initialCredits: number;
 };
@@ -43,7 +50,10 @@ const UPSELL_DELAY_MS = 90_000;
 
 export function CustomizeWorkspace({
   initialData,
+  initialSnapshot,
+  initialBuildId,
   carName,
+  baseImageUrl,
   planMode: initialPlanMode,
   initialCredits,
 }: CustomizeWorkspaceProps) {
@@ -56,7 +66,9 @@ export function CustomizeWorkspace({
     activeCategory,
     nav,
     credits,
+    buildId,
     isSaved,
+    isSaving,
     isCategoryPaid,
     setCredits,
     selectCategory,
@@ -67,6 +79,10 @@ export function CustomizeWorkspace({
     save,
   } = useCustomization({
     initialData,
+    initialSnapshot,
+    initialBuildId,
+    carName,
+    baseImageUrl,
     initialCredits,
     onNeedCredits: openUpgrade,
   });
@@ -106,6 +122,40 @@ export function CustomizeWorkspace({
     return () => window.removeEventListener("focus", refresh);
   }, [setCredits]);
 
+  // Landing back from a completed checkout (`?credits=success`): refresh the
+  // balance/plan (the webhook may land just after the redirect, so retry once)
+  // and strip the param so a later refresh doesn't re-trigger it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("credits") !== "success") {
+      return;
+    }
+    params.delete("credits");
+    const url = new URL(window.location.href);
+    url.search = params.toString();
+    window.history.replaceState(window.history.state, "", url.toString());
+
+    let active = true;
+    async function refresh() {
+      try {
+        const next = await fetchCredits();
+        if (!active) {
+          return;
+        }
+        setCredits(next.credits);
+        setPlanMode(next.planMode);
+      } catch {
+        // best-effort
+      }
+    }
+    void refresh();
+    const retry = setTimeout(() => void refresh(), 3000);
+    return () => {
+      active = false;
+      clearTimeout(retry);
+    };
+  }, [setCredits]);
+
   // Switching into a not-yet-paid category spends 5 credits, so confirm first.
   // Re-entering a paid category is free and instant (no prompt); if the balance
   // can't cover a new category, jump straight to the buy-credits dialog.
@@ -135,7 +185,6 @@ export function CustomizeWorkspace({
   const pendingMeta = pendingCategory ? CATEGORY_META[pendingCategory] : null;
 
   const modCount = countSelections(data);
-  const baseImageUrl = initialData.preview.imageUrl;
   const previewUrl = data.preview.imageUrl;
   const isGenerating = data.preview.status === "generating";
 
@@ -166,6 +215,7 @@ export function CustomizeWorkspace({
         data={data}
         activeCategory={activeCategory}
         isSaved={isSaved}
+        isSaving={isSaving}
         onSelectCategory={requestSelectCategory}
         onSave={save}
         onReset={reset}
@@ -174,6 +224,7 @@ export function CustomizeWorkspace({
       <main className="flex min-w-0 flex-1 flex-col">
         <TopBar
           isSaved={isSaved}
+          isSaving={isSaving}
           carName={carName}
           credits={credits}
           canCompare={canCompare}
@@ -245,13 +296,18 @@ export function CustomizeWorkspace({
         onCancel={() => setPendingCategory(null)}
       />
 
-      <UpgradeDialog open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
+      <UpgradeDialog
+        open={upgradeOpen}
+        buildId={buildId}
+        onClose={() => setUpgradeOpen(false)}
+      />
     </div>
   );
 }
 
 function TopBar({
   isSaved,
+  isSaving,
   carName,
   credits,
   canCompare,
@@ -265,6 +321,7 @@ function TopBar({
   onReset,
 }: {
   isSaved: boolean;
+  isSaving: boolean;
   carName: string;
   credits: number;
   canCompare: boolean;
@@ -283,7 +340,12 @@ function TopBar({
         <span className="truncate font-semibold text-base sm:text-lg">
           {carName || "My Build"}
         </span>
-        {isSaved ? (
+        {isSaving ? (
+          <span className="hidden items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 font-medium text-violet-300 text-xs sm:inline-flex">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-violet-300/40 border-t-violet-300" />
+            Saving…
+          </span>
+        ) : isSaved ? (
           <span className="hidden items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 font-medium text-emerald-400 text-xs sm:inline-flex">
             <CheckIcon className="h-3 w-3" />
             Saved
@@ -309,11 +371,13 @@ function TopBar({
         <button
           type="button"
           onClick={onSave}
-          disabled={isSaved}
+          disabled={isSaved || isSaving}
           aria-label="Save"
           className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-sm text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 lg:hidden"
         >
-          {isSaved ? (
+          {isSaving ? (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          ) : isSaved ? (
             <CheckIcon className="h-4 w-4" />
           ) : (
             <SaveIcon className="h-4 w-4" />

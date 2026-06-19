@@ -63,9 +63,10 @@ Enter a new category (first time in the build)
 The decrement is a single guarded SQL statement (`set credits = credits - 5
 where id = ? and credits >= 5`), so concurrent charges can't overspend. On 402
 the client opens the buy-credits dialog instead of generating previews. The
-"already paid this category" check is tracked per build session in the
-`useCustomization` hook (consistent with the in-memory caches that reset on
-refresh — a refresh + re-enter can recharge).
+"already paid this category" set is tracked on the coordinator and **persisted
+with the build** (see [`builds.md`](./builds.md)), so reopening a build — a
+refresh, or returning from checkout — never re-charges an already-paid
+category.
 
 ### Single source of truth
 
@@ -211,18 +212,22 @@ CarIntakeForm.onReady(data, carName, planMode)
 ## Stripe checkout & webhook
 
 ```text
-POST /api/stripe/checkout   body { pack }  -> Checkout Session (mode: payment)
+POST /api/stripe/checkout   body { pack, buildId? }  -> Checkout Session (payment)
   resolves credits + price id server-side from CREDIT_PACKS (+ STRIPE_PRICE_*),
   stamps metadata { userId, pack, credits }; returns { url }
+  success/cancel_url = /customize?build=<id>&credits=success|cancelled
 POST /api/stripe/webhook    verifies stripe-signature with STRIPE_WEBHOOK_SECRET
   on checkout.session.completed -> creditsService.grantPurchase(userId, pack)
     userRepository.addCredits(userId, pack.credits, 'top-up')
 ```
 
-Checkout opens in a new tab so the in-progress build is preserved; the workspace
-(and settings page) refresh the balance on window `focus` when the user returns.
-The Stripe client (`src/server/infrastructure/stripe/stripe.ts`) reads
-`STRIPE_SECRET_KEY` (falling back to `PROD_STRIPE_KEY`).
+Checkout opens in a new tab so the in-progress build is preserved, and the
+`buildId` is round-tripped through the success/cancel URL so the user lands back
+on the **same saved build** (see [`builds.md`](./builds.md)). The balance is
+refreshed when the user returns: on window `focus`, on load of the returning
+tab, and via the `?credits=success` param. The Stripe client
+(`src/server/infrastructure/stripe/stripe.ts`) reads `STRIPE_SECRET_KEY`
+(falling back to `PROD_STRIPE_KEY`).
 
 ## Assigning a plan
 

@@ -5,10 +5,12 @@ import { chargeCategory } from "../api/creditsApi";
 import { editCarImage } from "../api/customizeApi";
 import { CustomizationDataCoordinator } from "../core/customization-options/CustomizationData.coordinator";
 import { CATEGORY_ORDER } from "../core/customization-options/catalog";
+import type { BuildSnapshot } from "../core/customization-options/types/BuildSnapshot";
 import type {
   CustomizationCategory,
   CustomizationData,
 } from "../core/customization-options/types/CustomizationData";
+import { useBuildPersistence } from "./useBuildPersistence";
 
 type NavState = {
   canGoBack: boolean;
@@ -33,15 +35,29 @@ function readNav(coordinator: CustomizationDataCoordinator): NavState {
  *
  * The coordinator owns the source of truth; the hook mirrors its state and
  * exposes the category-flow and version-control actions to the UI. Initial data
- * is built from the LLM options response; selecting an option drives a real AI
- * edit of the current car image via the customization edit route.
+ * is built from the LLM options response (new session) or rehydrated from a
+ * saved {@link BuildSnapshot}. Selecting an option drives a real AI edit of the
+ * current car image via the customization edit route. Persistence (saving the
+ * session as a build) is delegated to {@link useBuildPersistence}.
  */
 export function useCustomization({
   initialData,
+  initialSnapshot,
+  initialBuildId,
+  carName,
+  baseImageUrl,
   initialCredits,
   onNeedCredits,
 }: {
   initialData: CustomizationData;
+  /** When resuming a saved build, its full serialized session. */
+  initialSnapshot?: BuildSnapshot;
+  /** When resuming a saved build, its id. */
+  initialBuildId?: string;
+  /** Car name, persisted with the build. */
+  carName: string;
+  /** The stock (uploaded) car image, persisted as the build's base. */
+  baseImageUrl: string;
   /** The user's credit balance when the workspace mounted. */
   initialCredits: number;
   /** Called when a category can't be entered for lack of credits. */
@@ -49,8 +65,14 @@ export function useCustomization({
 }) {
   const coordinatorRef = useRef<CustomizationDataCoordinator | null>(null);
   if (coordinatorRef.current === null) {
-    coordinatorRef.current = new CustomizationDataCoordinator(initialData, {
-      generatePreview: async ({ currentImageUrl, option }) => {
+    const deps = {
+      generatePreview: async ({
+        currentImageUrl,
+        option,
+      }: {
+        currentImageUrl: string | null;
+        option: { name: string; visualDescription: string };
+      }) => {
         if (!currentImageUrl) {
           throw new Error("Missing current car image");
         }
@@ -60,7 +82,10 @@ export function useCustomization({
           visualDescription: option.visualDescription,
         });
       },
-    });
+    };
+    coordinatorRef.current = initialSnapshot
+      ? CustomizationDataCoordinator.fromSnapshot(initialSnapshot, deps)
+      : new CustomizationDataCoordinator(initialData, deps);
   }
   const coordinator = coordinatorRef.current;
 
@@ -71,30 +96,30 @@ export function useCustomization({
     CATEGORY_ORDER[0],
   );
   const [nav, setNav] = useState<NavState>(() => readNav(coordinator));
-  const [savedCombination, setSavedCombination] = useState<string>(() =>
-    coordinator.currentCombinationString(),
-  );
   const [credits, setCredits] = useState(initialCredits);
 
-  // Categories already paid for this build session. Re-entering one (a switch
-  // back, history nav, undo/redo, reset) never recharges.
-  const paidCategoriesRef = useRef<Set<CustomizationCategory>>(new Set());
+  const { buildId, isSaved, isSaving, saveNow } = useBuildPersistence({
+    coordinator,
+    initialBuildId,
+    carName,
+    baseImageUrl,
+  });
 
   /**
    * Charges 5 credits for first-time entry into a category. Returns whether the
    * category may be entered: `true` if already paid or the charge succeeded;
    * `false` (and triggers the buy-credits prompt) when the balance can't cover
-   * it. A failed charge never enters/generates previews, so credits and visible
-   * previews stay in sync.
+   * it. Paid categories are tracked on the coordinator, so they persist with the
+   * build — reopening it never re-charges an already-paid category.
    */
   const guardEnter = useCallback(
     async (category: CustomizationCategory): Promise<boolean> => {
-      if (paidCategoriesRef.current.has(category)) {
+      if (coordinator.isCategoryPaid(category)) {
         return true;
       }
       const result = await chargeCategory();
       if (result.ok) {
-        paidCategoriesRef.current.add(category);
+        coordinator.markCategoryPaid(category);
         setCredits(result.credits);
         return true;
       }
@@ -103,7 +128,7 @@ export function useCustomization({
       }
       return false;
     },
-    [onNeedCredits],
+    [coordinator, onNeedCredits],
   );
 
   useEffect(() => {
@@ -115,7 +140,9 @@ export function useCustomization({
   }, [coordinator]);
 
   // Force the first category to be active and generate its option previews
-  // up-front (charging for it), so the user lands on a populated category.
+  // up-front (charging for it), so the user lands on a populated category. For a
+  // resumed build the category is already paid and its previews cached, so this
+  // neither re-charges nor regenerates.
   useEffect(() => {
     const first = CATEGORY_ORDER[0];
     setActiveCategory(first);
@@ -137,7 +164,7 @@ export function useCustomization({
       if (!allowed) {
         return;
       }
-      await coordinator.leaveCategory(activeCategory);
+      coordinator.leaveCategory(activeCategory);
       setActiveCategory(category);
       await coordinator.enterCategory(category);
     },
@@ -176,16 +203,16 @@ export function useCustomization({
     void coordinator.enterCategory(activeCategory);
   }, [activeCategory, coordinator]);
 
+  // Explicit "Save Build": checkpoint the current combination, then flush.
   const save = useCallback(async () => {
-    await coordinator.leaveCategory(activeCategory);
-    setSavedCombination(coordinator.currentCombinationString());
-  }, [activeCategory, coordinator]);
+    coordinator.leaveCategory(activeCategory);
+    await saveNow();
+  }, [activeCategory, coordinator, saveNow]);
 
   // Whether entering a category would be free (already paid this session).
   const isCategoryPaid = useCallback(
-    (category: CustomizationCategory) =>
-      paidCategoriesRef.current.has(category),
-    [],
+    (category: CustomizationCategory) => coordinator.isCategoryPaid(category),
+    [coordinator],
   );
 
   return {
@@ -193,7 +220,9 @@ export function useCustomization({
     activeCategory,
     nav,
     credits,
-    isSaved: savedCombination === nav.currentString,
+    buildId,
+    isSaved,
+    isSaving,
     isCategoryPaid,
     setCredits,
     selectCategory,

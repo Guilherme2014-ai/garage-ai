@@ -15,6 +15,13 @@
       "when": 1781839111798,
       "tag": "0001_slow_zarek",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781887158212,
+      "tag": "0002_lonely_paibok",
+      "breakpoints": true
     }
   ]
 }

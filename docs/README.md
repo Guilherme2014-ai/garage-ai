@@ -14,6 +14,10 @@ Documentation for the car customization feature.
 - [Pricing & Plan Modes](./pricing-and-plan-modes.md) — plan modes (`free` /
   `top-up`) and the privileges they gate, the Drizzle/Postgres `users` database,
   backend plan gating, and the download/upsell behavior in the UI.
+- [Builds](./builds.md) — saving a customization session (current state +
+  history + caches) as a persisted **build**: the `BuildSnapshot`
+  serialization, the `builds` table + API, autosave, the `?build=` URL param,
+  and the Stripe checkout round-trip.
 
 ## Feature at a glance
 

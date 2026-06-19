@@ -184,9 +184,9 @@ exist (or are in flight) from `enterCategory`:
 
 ### Leaving a Category
 
-`leaveCategory(category)` is a checkpoint: push the combination onto the tracker,
-cache the snapshot, call `persistSnapshot()` (currently a no-op — the backend
-persistence integration point), and notify subscribers.
+`leaveCategory(category)` is a checkpoint: it pushes the combination onto the
+tracker, caches the snapshot, and notifies subscribers. The resulting
+notification drives the build autosave (see [`builds.md`](./builds.md)).
 
 ### History Restore
 
@@ -198,15 +198,20 @@ against the restored build.
 
 ## React Hook
 
-`useCustomization({ initialData })`:
+`useCustomization({ initialData, initialSnapshot?, initialBuildId?, carName,
+baseImageUrl, initialCredits, onNeedCredits })`:
 
 - creates one coordinator instance (`useRef`), injecting the
-  `editCarImage`-backed preview generator.
+  `editCarImage`-backed preview generator. With an `initialSnapshot` it
+  rehydrates a saved build via `CustomizationDataCoordinator.fromSnapshot`.
 - mirrors coordinator data and nav state into React state via `subscribe`.
 - on mount, sets the first category active and calls `enterCategory` to populate
   its previews.
+- composes `useBuildPersistence` to save the session as a build (see
+  [`builds.md`](./builds.md)).
 - exposes `selectCategory`, `selectOption`, `goBack`, `goForward`, `restore`,
-  `reset`, `save`, plus `data`, `activeCategory`, `nav`, and `isSaved`.
+  `reset`, `save`, plus `data`, `activeCategory`, `nav`, `credits`, `buildId`,
+  `isSaved`, and `isSaving`.
 
 ## UI Flow
 
@@ -247,8 +252,9 @@ User action -> component callback -> useCustomization()
 
 ## Current Limitations
 
-- Snapshot persistence (`persistSnapshot()`) is still a no-op.
-- All caches are in-memory and reset on refresh.
+- The session is serialized and persisted as a **build** (see
+  [`builds.md`](./builds.md)); the runtime caches are in-memory but are saved
+  into the build, so a reload or a checkout round-trip resumes them.
 - Combination caching is order-independent, but AI edits are order-sensitive: the
   first image generated for a given combination is reused even if a different
   application order might look slightly different.

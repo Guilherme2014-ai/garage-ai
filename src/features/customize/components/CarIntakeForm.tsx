@@ -17,6 +17,7 @@ type CarIntakeFormProps = {
     carName: string,
     planMode: PlanMode,
     credits: number,
+    baseImageUrl: string,
   ) => void;
 };
 
@@ -68,7 +69,7 @@ export function CarIntakeForm({ onReady }: CarIntakeFormProps) {
       ]);
       const data = buildInitialDataFromOptions(options, baseImageUrl);
 
-      onReady(data, name, options.planMode, options.credits);
+      onReady(data, name, options.planMode, options.credits, baseImageUrl);
     } catch (err) {
       setError(
         err instanceof Error

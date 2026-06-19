@@ -4,6 +4,16 @@ import { parseCombinationString } from "./utils/parseCombinationString";
 export type Combination<K extends string> = Partial<Record<K, string>>;
 
 /**
+ * Serializable form of a {@link CombinationTracker}: the ordered history of
+ * combination strings plus the active pointer. Persisted as part of a build so
+ * undo/redo survives a reload.
+ */
+export type TrackerSnapshot = {
+  history: string[];
+  currentIndex: number;
+};
+
+/**
  * Version-control-like history for vehicle customizations.
  *
  * Every modification creates a new combination on top of the current one.
@@ -84,5 +94,16 @@ export class CombinationTracker<K extends string> {
 
   public getCurrentIndex(): number {
     return this.currentIndex;
+  }
+
+  /** Serializes the history + pointer so it can be persisted with a build. */
+  public toSnapshot(): TrackerSnapshot {
+    return { history: [...this.history], currentIndex: this.currentIndex };
+  }
+
+  /** Restores a previously serialized history + pointer. */
+  public restoreSnapshot(snapshot: TrackerSnapshot): void {
+    this.history = [...snapshot.history];
+    this.currentIndex = snapshot.currentIndex;
   }
 }

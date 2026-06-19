@@ -1,5 +1,9 @@
 import { CombinationTracker } from "./Combination.tracker";
 import { CombinationsStringCache } from "./CombinationsStringCache";
+import {
+  BUILD_SNAPSHOT_VERSION,
+  type BuildSnapshot,
+} from "./types/BuildSnapshot";
 import type {
   CombinationSelections,
   CustomizationCategory,
@@ -64,11 +68,33 @@ export class CustomizationDataCoordinator {
     CustomizationCategory,
     string
   >();
-  private readonly initialImageUrl: string | null;
+  /**
+   * Categories already charged for in this build. Mirrored into the persisted
+   * snapshot so re-opening a build (refresh, returning from checkout) never
+   * re-charges an already-paid category.
+   */
+  private readonly paidCategories = new Set<CustomizationCategory>();
+  private initialImageUrl: string | null;
 
-  constructor(initialData: CustomizationData, deps: CoordinatorDeps) {
+  /**
+   * Creates a coordinator. Pass a {@link BuildSnapshot} to rehydrate a saved
+   * build exactly (state + history + caches + paid categories); omit it to start
+   * a fresh session seeded from `initialData`.
+   */
+  constructor(
+    initialData: CustomizationData,
+    deps: CoordinatorDeps,
+    snapshot?: BuildSnapshot,
+  ) {
     this.data = initialData;
     this.generatePreview = deps.generatePreview;
+
+    if (snapshot) {
+      this.initialImageUrl = snapshot.initialImageUrl;
+      this.hydrate(snapshot);
+      return;
+    }
+
     this.initialImageUrl = initialData.preview.imageUrl;
     this.tracker.push(initialData.selections);
 
@@ -77,6 +103,14 @@ export class CustomizationDataCoordinator {
     if (initialData.preview.imageUrl) {
       this.previewImageCache.set(initialString, initialData.preview.imageUrl);
     }
+  }
+
+  /** Restores a coordinator from a persisted {@link BuildSnapshot}. */
+  public static fromSnapshot(
+    snapshot: BuildSnapshot,
+    deps: CoordinatorDeps,
+  ): CustomizationDataCoordinator {
+    return new CustomizationDataCoordinator(snapshot.data, deps, snapshot);
   }
 
   // --- subscription -------------------------------------------------------
@@ -220,14 +254,25 @@ export class CustomizationDataCoordinator {
 
   /**
    * Leaving a category acts as a checkpoint: the current combination is
-   * committed to the tracker, the cache is updated, and the snapshot is
-   * persisted.
+   * committed to the tracker and the snapshot cached. The resulting
+   * notification drives the build autosave in the React layer.
    */
-  public async leaveCategory(_category: CustomizationCategory): Promise<void> {
+  public leaveCategory(_category: CustomizationCategory): void {
     this.tracker.push(this.data.selections);
     this.cache.set(this.currentCombinationString(), cloneData(this.data));
-    await this.persistSnapshot();
     this.notify();
+  }
+
+  // --- paid categories ----------------------------------------------------
+
+  /** Whether this category has already been charged for in this build. */
+  public isCategoryPaid(category: CustomizationCategory): boolean {
+    return this.paidCategories.has(category);
+  }
+
+  /** Records that this category has been charged for (persisted with the build). */
+  public markCategoryPaid(category: CustomizationCategory): void {
+    this.paidCategories.add(category);
   }
 
   // --- selection ----------------------------------------------------------
@@ -488,13 +533,41 @@ export class CustomizationDataCoordinator {
     return { ...snapshot, categories };
   }
 
+  // --- serialization ------------------------------------------------------
+
   /**
-   * MOCK: persists the current snapshot. In production this would write to a
-   * backend; here it is a no-op kept as an explicit checkpoint step.
-   *
-   * TODO: persist the snapshot to the backend.
+   * Serializes the entire session — current state, history, and every cache —
+   * into a persistable {@link BuildSnapshot}. The inverse of {@link hydrate}.
    */
-  private async persistSnapshot(): Promise<void> {
-    return Promise.resolve();
+  public serialize(): BuildSnapshot {
+    return {
+      version: BUILD_SNAPSHOT_VERSION,
+      data: cloneData(this.data),
+      initialImageUrl: this.initialImageUrl,
+      tracker: this.tracker.toSnapshot(),
+      snapshots: this.cache.toRecord(),
+      previewImages: Object.fromEntries(this.previewImageCache),
+      categoryPreviewBase: Object.fromEntries(
+        this.categoryPreviewBase,
+      ) as BuildSnapshot["categoryPreviewBase"],
+      paidCategories: [...this.paidCategories],
+    };
+  }
+
+  /** Rehydrates every cache and the history from a persisted snapshot. */
+  private hydrate(snapshot: BuildSnapshot): void {
+    this.data = snapshot.data;
+    this.tracker.restoreSnapshot(snapshot.tracker);
+    this.cache.load(snapshot.snapshots);
+
+    for (const [key, value] of Object.entries(snapshot.previewImages)) {
+      this.previewImageCache.set(key, value);
+    }
+    for (const [key, value] of Object.entries(snapshot.categoryPreviewBase)) {
+      this.categoryPreviewBase.set(key as CustomizationCategory, value);
+    }
+    for (const category of snapshot.paidCategories) {
+      this.paidCategories.add(category);
+    }
   }
 }

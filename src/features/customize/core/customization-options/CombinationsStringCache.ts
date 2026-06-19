@@ -33,4 +33,14 @@ export class CombinationsStringCache {
   public get size(): number {
     return this.cache.size;
   }
+
+  /** Plain-object view of every cached snapshot, for persistence. */
+  public toRecord(): Record<string, CustomizationData> {
+    return Object.fromEntries(this.cache);
+  }
+
+  /** Replaces the cache contents from a previously serialized record. */
+  public load(record: Record<string, CustomizationData>): void {
+    this.cache = new Map(Object.entries(record));
+  }
 }

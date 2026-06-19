@@ -23,6 +23,7 @@ type CategoryPanelProps = {
   data: CustomizationData;
   activeCategory: CustomizationCategory;
   isSaved: boolean;
+  isSaving: boolean;
   onSelectCategory: (category: CustomizationCategory) => void;
   onSave: () => void;
   onReset: () => void;
@@ -32,6 +33,7 @@ export function CategoryPanel({
   data,
   activeCategory,
   isSaved,
+  isSaving,
   onSelectCategory,
   onSave,
   onReset,
@@ -109,10 +111,15 @@ export function CategoryPanel({
         <button
           type="button"
           onClick={onSave}
-          disabled={isSaved}
+          disabled={isSaved || isSaving}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-500 py-3 font-medium text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isSaved ? (
+          {isSaving ? (
+            <>
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              Saving…
+            </>
+          ) : isSaved ? (
             <>
               <CheckIcon className="h-4 w-4" />
               Build Saved
