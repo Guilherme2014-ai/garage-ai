@@ -59,3 +59,22 @@ export const builds = pgTable("builds", {
 
 export type BuildRow = typeof builds.$inferSelect;
 export type NewBuildRow = typeof builds.$inferInsert;
+
+/**
+ * Stripe webhook events we've already acted on, keyed by Stripe's event id.
+ * Stripe delivers events at-least-once and retries on any non-2xx, so the
+ * webhook records each handled event here in the same transaction as the
+ * credit grant: a duplicate delivery hits the primary-key conflict and is
+ * skipped, keeping purchases idempotent (no double credits).
+ */
+export const processedStripeEvents = pgTable("processed_stripe_events", {
+  eventId: text("event_id").primaryKey(),
+  type: text("type").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type ProcessedStripeEventRow = typeof processedStripeEvents.$inferSelect;
+export type NewProcessedStripeEventRow =
+  typeof processedStripeEvents.$inferInsert;

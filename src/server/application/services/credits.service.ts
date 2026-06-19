@@ -38,10 +38,24 @@ export const creditsService = {
   },
 
   /**
-   * Applies a completed purchase: adds the pack's credits and upgrades the
-   * buyer to `top-up`. Safe to no-op if the user no longer exists.
+   * Applies a completed purchase exactly once for the originating Stripe event:
+   * adds the pack's credits and upgrades the buyer to `top-up`. Returns
+   * `"duplicate"` when the event was already processed (a redelivery/retry) so
+   * the caller can skip without double-crediting, or `"granted"` otherwise.
+   * Safe to no-op if the user no longer exists.
    */
-  async grantPurchase(userId: string, pack: CreditPack): Promise<void> {
-    await userRepository.addCredits(userId, pack.credits, "top-up");
+  async grantPurchase(
+    eventId: string,
+    eventType: string,
+    userId: string,
+    pack: CreditPack,
+  ): Promise<"granted" | "duplicate"> {
+    return userRepository.grantPurchaseOnce({
+      eventId,
+      eventType,
+      userId,
+      credits: pack.credits,
+      planMode: "top-up",
+    });
   },
 };

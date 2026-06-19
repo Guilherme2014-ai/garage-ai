@@ -8,6 +8,7 @@ import {
 import { db } from "@/server/infrastructure/database/db";
 import {
   type NewUserRow,
+  processedStripeEvents,
   type UserRow,
   users,
 } from "@/server/infrastructure/database/schema";
@@ -138,24 +139,40 @@ export const userRepository = {
   },
 
   /**
-   * Atomically adds `amount` credits and optionally updates the plan mode (a
-   * purchase both tops up credits and upgrades the buyer). Returns the updated
-   * user, or `null` if the user no longer exists.
+   * Grants a completed purchase exactly once for a given Stripe event. Records
+   * the event id and tops up the buyer's credits (upgrading them to `top-up`)
+   * in a single transaction, so a duplicate delivery hits the primary-key
+   * conflict and returns `"duplicate"` without granting again. A missing user
+   * is a no-op — the event is still recorded so Stripe stops retrying — while a
+   * thrown error rolls the whole transaction back, letting the caller return a
+   * 500 so Stripe retries cleanly.
    */
-  async addCredits(
-    id: string,
-    amount: number,
-    planMode?: PlanMode,
-  ): Promise<UserEntity | null> {
-    const [row] = await db
-      .update(users)
-      .set({
-        credits: sql`${users.credits} + ${amount}`,
-        ...(planMode ? { planMode } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, id))
-      .returning();
-    return row ? toEntity(row) : null;
+  async grantPurchaseOnce(params: {
+    eventId: string;
+    eventType: string;
+    userId: string;
+    credits: number;
+    planMode: PlanMode;
+  }): Promise<"granted" | "duplicate"> {
+    const { eventId, eventType, userId, credits, planMode } = params;
+    return db.transaction(async (tx) => {
+      const [recorded] = await tx
+        .insert(processedStripeEvents)
+        .values({ eventId, type: eventType })
+        .onConflictDoNothing()
+        .returning({ eventId: processedStripeEvents.eventId });
+      if (!recorded) {
+        return "duplicate";
+      }
+      await tx
+        .update(users)
+        .set({
+          credits: sql`${users.credits} + ${credits}`,
+          planMode,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+      return "granted";
+    });
   },
 };
