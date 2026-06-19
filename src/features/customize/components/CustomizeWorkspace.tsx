@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { fetchCredits } from "../api/creditsApi";
+import { CREDITS_PER_CATEGORY } from "../core/credits/credits";
 import {
   CATEGORY_META,
   CATEGORY_ORDER,
@@ -33,6 +35,7 @@ type CustomizeWorkspaceProps = {
   initialData: CustomizationData;
   carName: string;
   planMode: PlanMode;
+  initialCredits: number;
 };
 
 /** How long after entering the page the free-plan upsell appears (1m30s). */
@@ -41,28 +44,40 @@ const UPSELL_DELAY_MS = 90_000;
 export function CustomizeWorkspace({
   initialData,
   carName,
-  planMode,
+  planMode: initialPlanMode,
+  initialCredits,
 }: CustomizeWorkspaceProps) {
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+
+  const openUpgrade = useCallback(() => setUpgradeOpen(true), []);
+
   const {
     data,
     activeCategory,
     nav,
+    credits,
     isSaved,
+    isCategoryPaid,
+    setCredits,
     selectCategory,
     selectOption,
     goBack,
     goForward,
     reset,
     save,
-  } = useCustomization({ initialData });
+  } = useCustomization({
+    initialData,
+    initialCredits,
+    onNeedCredits: openUpgrade,
+  });
 
+  // Plan mode can change after a purchase (free -> top-up), so it lives in
+  // state and is refreshed alongside the balance when the user returns.
+  const [planMode, setPlanMode] = useState<PlanMode>(initialPlanMode);
   const [compareOpen, setCompareOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [pendingCategory, setPendingCategory] =
     useState<CustomizationCategory | null>(null);
-  const [dontAskAgain, setDontAskAgain] = useState(false);
-  const [skipSwitchConfirm, setSkipSwitchConfirm] = useState(false);
 
   const isFree = planMode === "free";
 
@@ -75,24 +90,41 @@ export function CustomizeWorkspace({
     return () => clearTimeout(timer);
   }, [isFree]);
 
-  // Switching category checkpoints the build, so always confirm first (unless
-  // the user opted out for the session).
+  // Checkout happens in another tab; when the user returns, refresh the balance
+  // and plan so a completed purchase is reflected without losing the build.
+  useEffect(() => {
+    async function refresh() {
+      try {
+        const next = await fetchCredits();
+        setCredits(next.credits);
+        setPlanMode(next.planMode);
+      } catch {
+        // best-effort; the next action will surface any real problem
+      }
+    }
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [setCredits]);
+
+  // Switching into a not-yet-paid category spends 5 credits, so confirm first.
+  // Re-entering a paid category is free and instant (no prompt); if the balance
+  // can't cover a new category, jump straight to the buy-credits dialog.
   function requestSelectCategory(category: CustomizationCategory) {
     if (category === activeCategory) {
       return;
     }
-    if (skipSwitchConfirm) {
+    if (isCategoryPaid(category)) {
       void selectCategory(category);
       return;
     }
-    setDontAskAgain(false);
+    if (credits < CREDITS_PER_CATEGORY) {
+      setUpgradeOpen(true);
+      return;
+    }
     setPendingCategory(category);
   }
 
   function confirmCategorySwitch() {
-    if (dontAskAgain) {
-      setSkipSwitchConfirm(true);
-    }
     if (pendingCategory) {
       void selectCategory(pendingCategory);
     }
@@ -143,10 +175,12 @@ export function CustomizeWorkspace({
         <TopBar
           isSaved={isSaved}
           carName={carName}
+          credits={credits}
           canCompare={canCompare}
           canDownload={canDownload}
           isDownloading={isDownloading}
           isFree={isFree}
+          onBuyCredits={() => setUpgradeOpen(true)}
           onCompare={() => setCompareOpen(true)}
           onDownload={handleDownload}
           onSave={save}
@@ -197,17 +231,16 @@ export function CustomizeWorkspace({
                 to <span className="text-zinc-200">{pendingMeta.label}</span>
               </>
             ) : null}
-            . Your build is saved automatically, so you can come back and change
-            it anytime.
+            . This uses{" "}
+            <span className="font-medium text-violet-300">
+              {CREDITS_PER_CATEGORY} credits
+            </span>{" "}
+            — you have <span className="text-zinc-200">{credits}</span>. Your
+            build is saved automatically, so you can come back anytime for free.
           </>
         }
-        confirmLabel="Continue"
+        confirmLabel={`Use ${CREDITS_PER_CATEGORY} credits`}
         cancelLabel="Stay here"
-        checkbox={{
-          label: "Don't ask again this session",
-          checked: dontAskAgain,
-          onChange: setDontAskAgain,
-        }}
         onConfirm={confirmCategorySwitch}
         onCancel={() => setPendingCategory(null)}
       />
@@ -220,10 +253,12 @@ export function CustomizeWorkspace({
 function TopBar({
   isSaved,
   carName,
+  credits,
   canCompare,
   canDownload,
   isDownloading,
   isFree,
+  onBuyCredits,
   onCompare,
   onDownload,
   onSave,
@@ -231,10 +266,12 @@ function TopBar({
 }: {
   isSaved: boolean;
   carName: string;
+  credits: number;
   canCompare: boolean;
   canDownload: boolean;
   isDownloading: boolean;
   isFree: boolean;
+  onBuyCredits: () => void;
   onCompare: () => void;
   onDownload: () => void;
   onSave: () => void;
@@ -259,6 +296,16 @@ function TopBar({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={onBuyCredits}
+          title="Add credits"
+          className="flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2 font-medium text-sm text-violet-200 transition hover:bg-violet-500/20"
+        >
+          <SparkleIcon className="h-4 w-4" />
+          <span className="tabular-nums">{credits}</span>
+          <span className="hidden sm:inline">credits</span>
+        </button>
         <button
           type="button"
           onClick={onSave}

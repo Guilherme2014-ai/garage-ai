@@ -10,6 +10,7 @@ type ReadyState = {
   data: CustomizationData;
   carName: string;
   planMode: PlanMode;
+  credits: number;
 };
 
 /**
@@ -22,8 +23,8 @@ export function CustomizeFlow() {
   if (!ready) {
     return (
       <CarIntakeForm
-        onReady={(data, carName, planMode) =>
-          setReady({ data, carName, planMode })
+        onReady={(data, carName, planMode, credits) =>
+          setReady({ data, carName, planMode, credits })
         }
       />
     );
@@ -34,6 +35,7 @@ export function CustomizeFlow() {
       initialData={ready.data}
       carName={ready.carName}
       planMode={ready.planMode}
+      initialCredits={ready.credits}
     />
   );
 }

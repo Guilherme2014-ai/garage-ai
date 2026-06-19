@@ -37,3 +37,9 @@ export class ValidationError extends AppError {
     super(message, 422, "VALIDATION_ERROR");
   }
 }
+
+export class InsufficientCreditsError extends AppError {
+  constructor(message = "Not enough credits") {
+    super(message, 402, "INSUFFICIENT_CREDITS");
+  }
+}

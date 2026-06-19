@@ -22,6 +22,8 @@ export interface ApiCustomizationOptionsResult {
   vehicleProfile: { style: string; era: string; summary: string };
   categories: Record<string, ApiCustomizationOption[]>;
   planMode: PlanMode;
+  /** The user's credit balance at generation time. */
+  credits: number;
 }
 
 interface ApiEnvelope<T> {

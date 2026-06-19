@@ -8,6 +8,13 @@
       "when": 1781827077807,
       "tag": "0000_sharp_rumiko_fujikawa",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781839111798,
+      "tag": "0001_slow_zarek",
+      "breakpoints": true
     }
   ]
 }

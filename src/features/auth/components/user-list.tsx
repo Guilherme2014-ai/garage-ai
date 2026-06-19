@@ -57,10 +57,7 @@ export function UserList() {
       </h2>
       <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
         {users.map((user) => (
-          <li
-            key={user.id}
-            className="flex items-center gap-3 px-4 py-3"
-          >
+          <li key={user.id} className="flex items-center gap-3 px-4 py-3">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-sm font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
               {user.name.charAt(0).toUpperCase()}
             </div>

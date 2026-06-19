@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { STARTING_CREDITS } from "@/server/domain/credits/credits";
 import { DEFAULT_PLAN_MODE } from "@/server/domain/plan/plan-mode";
 
 /**
@@ -15,6 +16,7 @@ export const users = pgTable("users", {
   provider: text("provider"),
   providerId: text("provider_id"),
   planMode: text("plan_mode").notNull().default(DEFAULT_PLAN_MODE),
+  credits: integer("credits").notNull().default(STARTING_CREDITS),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

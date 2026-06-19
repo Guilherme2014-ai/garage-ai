@@ -25,7 +25,7 @@ export const PLAN_LIMITS: Record<PlanMode, PlanLimits> = {
     canDownload: false,
   },
   "top-up": {
-    maxCategories: Number.POSITIVE_INFINITY,
+    maxCategories: 5,
     optionsPerCategory: 12,
     canDownload: true,
   },

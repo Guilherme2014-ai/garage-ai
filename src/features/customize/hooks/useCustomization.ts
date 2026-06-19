@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { chargeCategory } from "../api/creditsApi";
 import { editCarImage } from "../api/customizeApi";
 import { CustomizationDataCoordinator } from "../core/customization-options/CustomizationData.coordinator";
 import { CATEGORY_ORDER } from "../core/customization-options/catalog";
@@ -37,8 +38,14 @@ function readNav(coordinator: CustomizationDataCoordinator): NavState {
  */
 export function useCustomization({
   initialData,
+  initialCredits,
+  onNeedCredits,
 }: {
   initialData: CustomizationData;
+  /** The user's credit balance when the workspace mounted. */
+  initialCredits: number;
+  /** Called when a category can't be entered for lack of credits. */
+  onNeedCredits: () => void;
 }) {
   const coordinatorRef = useRef<CustomizationDataCoordinator | null>(null);
   if (coordinatorRef.current === null) {
@@ -67,6 +74,37 @@ export function useCustomization({
   const [savedCombination, setSavedCombination] = useState<string>(() =>
     coordinator.currentCombinationString(),
   );
+  const [credits, setCredits] = useState(initialCredits);
+
+  // Categories already paid for this build session. Re-entering one (a switch
+  // back, history nav, undo/redo, reset) never recharges.
+  const paidCategoriesRef = useRef<Set<CustomizationCategory>>(new Set());
+
+  /**
+   * Charges 5 credits for first-time entry into a category. Returns whether the
+   * category may be entered: `true` if already paid or the charge succeeded;
+   * `false` (and triggers the buy-credits prompt) when the balance can't cover
+   * it. A failed charge never enters/generates previews, so credits and visible
+   * previews stay in sync.
+   */
+  const guardEnter = useCallback(
+    async (category: CustomizationCategory): Promise<boolean> => {
+      if (paidCategoriesRef.current.has(category)) {
+        return true;
+      }
+      const result = await chargeCategory();
+      if (result.ok) {
+        paidCategoriesRef.current.add(category);
+        setCredits(result.credits);
+        return true;
+      }
+      if (result.insufficient) {
+        onNeedCredits();
+      }
+      return false;
+    },
+    [onNeedCredits],
+  );
 
   useEffect(() => {
     const unsubscribe = coordinator.subscribe((next) => {
@@ -77,22 +115,33 @@ export function useCustomization({
   }, [coordinator]);
 
   // Force the first category to be active and generate its option previews
-  // up-front, so the user lands on a populated category.
+  // up-front (charging for it), so the user lands on a populated category.
   useEffect(() => {
-    setActiveCategory(CATEGORY_ORDER[0]);
-    void coordinator.enterCategory(CATEGORY_ORDER[0]);
-  }, [coordinator]);
+    const first = CATEGORY_ORDER[0];
+    setActiveCategory(first);
+    void guardEnter(first).then((allowed) => {
+      if (allowed) {
+        void coordinator.enterCategory(first);
+      }
+    });
+  }, [coordinator, guardEnter]);
 
   const selectCategory = useCallback(
     async (category: CustomizationCategory) => {
       if (category === activeCategory) {
         return;
       }
+      // Charge for (or confirm prior payment of) the target before switching;
+      // abort the switch entirely when it can't be paid.
+      const allowed = await guardEnter(category);
+      if (!allowed) {
+        return;
+      }
       await coordinator.leaveCategory(activeCategory);
       setActiveCategory(category);
       await coordinator.enterCategory(category);
     },
-    [activeCategory, coordinator],
+    [activeCategory, coordinator, guardEnter],
   );
 
   const selectOption = useCallback(
@@ -132,11 +181,21 @@ export function useCustomization({
     setSavedCombination(coordinator.currentCombinationString());
   }, [activeCategory, coordinator]);
 
+  // Whether entering a category would be free (already paid this session).
+  const isCategoryPaid = useCallback(
+    (category: CustomizationCategory) =>
+      paidCategoriesRef.current.has(category),
+    [],
+  );
+
   return {
     data,
     activeCategory,
     nav,
+    credits,
     isSaved: savedCombination === nav.currentString,
+    isCategoryPaid,
+    setCredits,
     selectCategory,
     selectOption,
     goBack,

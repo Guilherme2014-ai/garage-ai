@@ -1,6 +1,6 @@
 import { apiError, apiServerError, apiSuccess } from "@/lib/api/api-response";
 import { requireAuthAPI } from "@/lib/auth/auth-utils";
-import { planService } from "@/server/application/services";
+import { creditsService, planService } from "@/server/application/services";
 import { generateCustomizationOptions } from "@/server/application/use-cases/generate-customization-options/generateCustomizationOptions";
 import { AppError } from "@/server/domain/errors";
 
@@ -50,7 +50,8 @@ export async function POST(request: Request) {
       categories,
       planMode,
     });
-    return apiSuccess(result, 201);
+    const credits = await creditsService.getCredits(userId);
+    return apiSuccess({ ...result, credits }, 201);
   } catch (err) {
     if (err instanceof AppError) {
       return apiError(err.message, err.statusCode, err.errorCode);

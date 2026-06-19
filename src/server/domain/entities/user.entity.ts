@@ -9,6 +9,7 @@ export interface UserEntity {
   provider: string | null;
   providerId: string | null;
   planMode: PlanMode;
+  credits: number;
   createdAt: Date;
   updatedAt: Date;
 }

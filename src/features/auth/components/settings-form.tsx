@@ -1,7 +1,9 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { fetchCredits } from "@/features/customize/api/creditsApi";
+import { UpgradeDialog } from "@/features/customize/components/UpgradeDialog";
 
 type SettingsFormProps = {
   initialName: string;
@@ -27,6 +29,24 @@ export function SettingsForm({ initialName, email, image }: SettingsFormProps) {
   const [name, setName] = useState(initialName);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<Status>({ type: "idle" });
+  const [credits, setCredits] = useState<number | null>(null);
+  const [buyOpen, setBuyOpen] = useState(false);
+
+  const refreshCredits = useCallback(async () => {
+    try {
+      const next = await fetchCredits();
+      setCredits(next.credits);
+    } catch {
+      // leave the previous value; the card just won't update
+    }
+  }, []);
+
+  // Load on mount and whenever the user returns (e.g. from a checkout tab).
+  useEffect(() => {
+    void refreshCredits();
+    window.addEventListener("focus", refreshCredits);
+    return () => window.removeEventListener("focus", refreshCredits);
+  }, [refreshCredits]);
 
   const trimmed = name.trim();
   const isDirty = trimmed !== initialName.trim();
@@ -139,6 +159,27 @@ export function SettingsForm({ initialName, email, image }: SettingsFormProps) {
           )}
         </div>
       </form>
+
+      <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.02] p-6 sm:p-8">
+        <div>
+          <h2 className="font-semibold text-lg">Credits</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            Credits power category modifications.{" "}
+            <span className="text-zinc-300">
+              Balance: {credits === null ? "…" : credits}
+            </span>
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setBuyOpen(true)}
+          className="h-10 rounded-lg bg-gradient-to-r from-violet-600 to-blue-500 px-5 font-medium text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90"
+        >
+          Buy credits
+        </button>
+      </div>
+
+      <UpgradeDialog open={buyOpen} onClose={() => setBuyOpen(false)} />
 
       <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.02] p-6 sm:p-8">
         <div>

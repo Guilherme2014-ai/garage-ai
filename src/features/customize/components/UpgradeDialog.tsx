@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { startCreditCheckout } from "../api/creditsApi";
+import {
+  CREDIT_PACKS,
+  CREDITS_PER_CATEGORY,
+  type CreditPackId,
+} from "../core/credits/credits";
 import { CheckIcon, SparkleIcon, XIcon } from "./icons";
 
 type UpgradeDialogProps = {
@@ -10,12 +16,12 @@ type UpgradeDialogProps = {
 
 const BENEFITS = [
   {
-    title: "More modifications",
-    description: "Unlock every customization category, not just the first few.",
+    title: "Unlock 5 categories",
+    description: "Generate options across more of your build, not just a few.",
   },
   {
-    title: "More equipment options",
-    description: "Get the full set of curated parts for each category.",
+    title: "Modify more categories",
+    description: `Each category modification costs ${CREDITS_PER_CATEGORY} credits.`,
   },
   {
     title: "Unlimited downloads",
@@ -24,11 +30,16 @@ const BENEFITS = [
 ];
 
 /**
- * Friendly upsell shown to free-plan users — surfaced automatically a while
- * after they start customizing, and when they try a top-up-only action such as
- * downloading. Billing isn't wired up yet, so the CTA is a placeholder.
+ * Buy-credits dialog — surfaced automatically a while after a free user starts
+ * customizing, when they run out of credits mid-build, and when they try a
+ * top-up-only action such as downloading. Checkout opens in a new tab so the
+ * in-progress build is preserved; the workspace refreshes the balance when the
+ * user returns.
  */
 export function UpgradeDialog({ open, onClose }: UpgradeDialogProps) {
+  const [pending, setPending] = useState<CreditPackId | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -44,6 +55,21 @@ export function UpgradeDialog({ open, onClose }: UpgradeDialogProps) {
 
   if (!open) {
     return null;
+  }
+
+  async function handleBuy(pack: CreditPackId) {
+    setError(null);
+    setPending(pack);
+    try {
+      const url = await startCreditCheckout(pack);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not start checkout.",
+      );
+    } finally {
+      setPending(null);
+    }
   }
 
   return (
@@ -75,10 +101,10 @@ export function UpgradeDialog({ open, onClose }: UpgradeDialogProps) {
             <SparkleIcon className="h-6 w-6" />
           </span>
           <h2 className="mt-4 font-bold text-xl tracking-tight">
-            Unlock the full garage
+            Top up your credits
           </h2>
           <p className="mt-1.5 text-sm text-zinc-400">
-            Add credits to take your build further.
+            Buy credits to keep modifying your build.
           </p>
         </div>
 
@@ -99,14 +125,40 @@ export function UpgradeDialog({ open, onClose }: UpgradeDialogProps) {
         </div>
 
         <div className="space-y-2 px-6 pt-2 pb-6">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-500 py-3 font-semibold text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90"
-          >
-            <SparkleIcon className="h-4 w-4" />
-            Add credits
-          </button>
+          {CREDIT_PACKS.map((pack) => (
+            <button
+              key={pack.id}
+              type="button"
+              disabled={pending !== null}
+              onClick={() => handleBuy(pack.id)}
+              className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-left transition hover:border-violet-500/40 hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="flex flex-col">
+                <span className="font-semibold text-sm text-white">
+                  {pack.credits} credits
+                </span>
+                <span className="text-xs text-zinc-500">
+                  {Math.floor(pack.credits / CREDITS_PER_CATEGORY)} category
+                  modifications
+                </span>
+              </span>
+              <span className="flex items-center gap-2">
+                <span className="font-semibold text-sm text-violet-200">
+                  {pack.priceLabel ?? `$${pack.priceUsd}`}
+                </span>
+                {pending === pack.id && (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                )}
+              </span>
+            </button>
+          ))}
+
+          {error && (
+            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-red-300 text-xs">
+              {error}
+            </p>
+          )}
+
           <button
             type="button"
             onClick={onClose}

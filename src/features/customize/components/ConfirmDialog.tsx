@@ -8,12 +8,6 @@ type ConfirmDialogProps = {
   message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
-  /** Optional "don't ask again" style checkbox shown above the actions. */
-  checkbox?: {
-    label: string;
-    checked: boolean;
-    onChange: (checked: boolean) => void;
-  };
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -28,7 +22,6 @@ export function ConfirmDialog({
   message,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
-  checkbox,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -66,18 +59,6 @@ export function ConfirmDialog({
       <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0a0912] p-5 shadow-2xl shadow-black/50">
         <h2 className="font-semibold text-lg">{title}</h2>
         <div className="mt-2 text-sm text-zinc-400">{message}</div>
-
-        {checkbox && (
-          <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-zinc-400">
-            <input
-              type="checkbox"
-              checked={checkbox.checked}
-              onChange={(event) => checkbox.onChange(event.target.checked)}
-              className="h-4 w-4 rounded border-white/20 bg-white/5 accent-violet-500"
-            />
-            {checkbox.label}
-          </label>
-        )}
 
         <div className="mt-5 flex justify-end gap-2">
           <button

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import type { UserEntity } from "@/server/domain/entities";
 import {
   DEFAULT_PLAN_MODE,
@@ -23,6 +23,7 @@ function toEntity(row: UserRow): UserEntity {
     provider: row.provider,
     providerId: row.providerId,
     planMode: isPlanMode(row.planMode) ? row.planMode : DEFAULT_PLAN_MODE,
+    credits: row.credits,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -69,7 +70,7 @@ export const userRepository = {
   async create(
     userData: Omit<
       UserEntity,
-      "id" | "createdAt" | "updatedAt" | "planMode"
+      "id" | "createdAt" | "updatedAt" | "planMode" | "credits"
     > & {
       planMode?: PlanMode;
     },
@@ -116,5 +117,45 @@ export const userRepository = {
       .where(eq(users.id, id))
       .returning({ id: users.id });
     return deleted.length > 0;
+  },
+
+  /**
+   * Atomically deducts `amount` credits, but only if the balance can cover it.
+   * Returns the new balance, or `null` when the user has insufficient credits
+   * (no row updated) — the `credits >= amount` guard keeps the check and the
+   * decrement in a single statement so concurrent charges can't overspend.
+   */
+  async decrementCredits(id: string, amount: number): Promise<number | null> {
+    const [row] = await db
+      .update(users)
+      .set({
+        credits: sql`${users.credits} - ${amount}`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(users.id, id), gte(users.credits, amount)))
+      .returning({ credits: users.credits });
+    return row ? row.credits : null;
+  },
+
+  /**
+   * Atomically adds `amount` credits and optionally updates the plan mode (a
+   * purchase both tops up credits and upgrades the buyer). Returns the updated
+   * user, or `null` if the user no longer exists.
+   */
+  async addCredits(
+    id: string,
+    amount: number,
+    planMode?: PlanMode,
+  ): Promise<UserEntity | null> {
+    const [row] = await db
+      .update(users)
+      .set({
+        credits: sql`${users.credits} + ${amount}`,
+        ...(planMode ? { planMode } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, id))
+      .returning();
+    return row ? toEntity(row) : null;
   },
 };
