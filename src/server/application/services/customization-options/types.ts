@@ -1,8 +1,12 @@
+import type { PlanMode } from "@/server/domain/plan/plan-mode";
+
 export interface GenerateCustomizationOptionsInput {
   /** Vehicle name/model, e.g. "Nissan Skyline GT-R R34". */
   car: string;
   /** Categories to generate options for, e.g. ["wheels", "paint", "exhausts"]. */
   categories: string[];
+  /** Plan mode the request is served under; gates category/option counts. */
+  planMode: PlanMode;
 }
 
 /** A single vehicle-aware aftermarket recommendation. */
@@ -42,4 +46,6 @@ export interface CustomizationOptionsResult {
   vehicleProfile: VehicleProfile;
   /** Category slug -> ranked options (most to least relevant). */
   categories: Record<string, CustomizationOption[]>;
+  /** Plan mode the options were generated under. */
+  planMode: PlanMode;
 }

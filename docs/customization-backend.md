@@ -41,7 +41,10 @@ Seeds the flow with the user's base car photo.
 
 ### `POST /api/customize/options`
 
-Generates vehicle-aware, ranked options per category via the LLM.
+Generates vehicle-aware, ranked options per category via the LLM. The category
+and per-category option counts are **gated by the caller's plan mode** (see
+[`pricing-and-plan-modes.md`](./pricing-and-plan-modes.md)); the route resolves
+the plan from the signed-in user, so it is not part of the request body.
 
 - Request (JSON): `{ car: string, categories: string[] }`.
 - Response `201`:
@@ -62,10 +65,11 @@ Generates vehicle-aware, ranked options per category via the LLM.
         "colorHex": "#b45309",   // optional
         "tags": ["JDM", "forged"]
       }
-      // ≥ 8 options, ranked
+      // exactly `optionsPerCategory` options for the plan (free 5, top-up 12), ranked
     ]
-    // one key per requested category
-  }
+    // one key per requested category (capped to the plan's maxCategories)
+  },
+  "planMode": "free" // or "top-up" — the plan the options were generated under
 }
 ```
 
@@ -88,14 +92,19 @@ Applies a single option to a car image. The prompt is built **server-side** from
 
 `src/server/application/services/customization-options/`
 
-1. `normalizeInput`: trims the car name, lowercases/dedupes categories, enforces
-   1..`MAX_CATEGORIES` (20).
-2. Builds the system + user prompt (see Prompts).
+1. `normalizeInput`: trims the car name, lowercases/dedupes categories, defaults
+   the plan mode, and **caps the categories to the plan's `maxCategories`**.
+2. Builds the system + user prompt (see Prompts), asking for exactly the plan's
+   `optionsPerCategory` options.
 3. Calls `generateText` (WaveSpeed `any-llm`).
 4. `extractJson`: strips code fences and parses the first `{...}` block.
 5. `buildResult`: per requested category, coerces options, drops entries missing
-   `name`/`brand`, re-ranks to array order, and **requires at least
-   `MIN_OPTIONS_PER_CATEGORY` (8)** valid options — otherwise it throws.
+   `name`/`brand`, re-ranks to array order, and **requires at least the plan's
+   `optionsPerCategory`** valid options (then slices to it) — otherwise it
+   throws. The result is stamped with `planMode`.
+
+Plan limits come from `getPlanLimits(planMode)`; see
+[`pricing-and-plan-modes.md`](./pricing-and-plan-modes.md).
 
 ### `carImageService`
 
@@ -114,10 +123,11 @@ Applies a single option to a car image. The prompt is built **server-side** from
 - `buildSystemPrompt()`: frames the model as a senior automotive customization
   specialist with cross-scene knowledge (JDM, Euro, Muscle, Supercar, Track,
   Drift, Stance) and demands **valid JSON only**.
-- `buildUserPrompt({ car, categories })`: injects the vehicle + categories and
-  pins the exact JSON schema, including the rules for `visualDescription` (a
-  concise, purely visual phrase for the image model — no brand names), `price`
-  (USD integer estimate), and optional `colorHex`.
+- `buildUserPrompt({ car, categories, planMode })`: injects the vehicle +
+  categories, asks for exactly the plan's `optionsPerCategory` options, and pins
+  the exact JSON schema, including the rules for `visualDescription` (a concise,
+  purely visual phrase for the image model — no brand names), `price` (USD
+  integer estimate), and optional `colorHex`.
 
 ### Edit prompt (`car-image/editPromptBuilder.ts`)
 
@@ -179,6 +189,11 @@ Paths: base uploads under `car-uploads/`, edit-time file uploads under
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob read/write token | — (required) |
 | `WAVESPEED_CONCURRENCY_LENGHT` | Max concurrent WaveSpeed calls per instance | `15` |
 | `AUTH_SECRET` | NextAuth session secret | — (required) |
+| `DATABASE_URL` | Postgres connection (Drizzle); backs users + plan modes | — (required) |
+
+> Users are persisted in Postgres via Drizzle, so authenticated routes now
+> require a provisioned, migrated database. See
+> [`pricing-and-plan-modes.md`](./pricing-and-plan-modes.md).
 
 ## Notes & Trade-offs
 

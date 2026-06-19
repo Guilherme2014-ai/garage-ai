@@ -3,6 +3,8 @@
  * the unwrapped `data` payload and throws a readable error on failure.
  */
 
+import type { PlanMode } from "../core/plan/planMode";
+
 /** A single LLM-recommended option as returned by `/api/customize/options`. */
 export interface ApiCustomizationOption {
   rank: number;
@@ -19,6 +21,7 @@ export interface ApiCustomizationOptionsResult {
   car: string;
   vehicleProfile: { style: string; era: string; summary: string };
   categories: Record<string, ApiCustomizationOption[]>;
+  planMode: PlanMode;
 }
 
 interface ApiEnvelope<T> {

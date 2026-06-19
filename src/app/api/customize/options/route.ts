@@ -1,5 +1,6 @@
 import { apiError, apiServerError, apiSuccess } from "@/lib/api/api-response";
 import { requireAuthAPI } from "@/lib/auth/auth-utils";
+import { planService } from "@/server/application/services";
 import { generateCustomizationOptions } from "@/server/application/use-cases/generate-customization-options/generateCustomizationOptions";
 import { AppError } from "@/server/domain/errors";
 
@@ -14,8 +15,13 @@ import { AppError } from "@/server/domain/errors";
  * the WaveSpeed LLM.
  */
 export async function POST(request: Request) {
-  const { error } = await requireAuthAPI();
+  const { session, error } = await requireAuthAPI();
   if (error) return error;
+
+  const userId = session?.user?.id;
+  if (!userId) {
+    return apiError("Unauthorized. Please sign in.", 401);
+  }
 
   let body: unknown;
   try {
@@ -38,7 +44,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await generateCustomizationOptions({ car, categories });
+    const planMode = await planService.getPlanModeForUserId(userId);
+    const result = await generateCustomizationOptions({
+      car,
+      categories,
+      planMode,
+    });
     return apiSuccess(result, 201);
   } catch (err) {
     if (err instanceof AppError) {

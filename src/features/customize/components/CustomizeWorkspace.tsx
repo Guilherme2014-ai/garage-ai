@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CATEGORY_META,
   CATEGORY_ORDER,
@@ -10,25 +10,38 @@ import type {
   CustomizationData,
 } from "../core/customization-options/types/CustomizationData";
 import { findOptionInData } from "../core/customization-options/utils/findOptionInData";
+import type { PlanMode } from "../core/plan/planMode";
 import { useCustomization } from "../hooks/useCustomization";
 import { downloadImage } from "../utils/downloadImage";
-import { BuildSummarySheet } from "./BuildSummarySheet";
 import { CategoryPanel } from "./CategoryPanel";
 import { CompareDialog } from "./CompareDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { ArrowRightIcon, CheckIcon, CompareIcon, DownloadIcon } from "./icons";
+import {
+  CheckIcon,
+  CompareIcon,
+  DownloadIcon,
+  ResetIcon,
+  SaveIcon,
+  SparkleIcon,
+} from "./icons";
 import { MobileCategoryTabs } from "./MobileCategoryTabs";
 import { OptionsPanel } from "./OptionsPanel";
 import { PreviewStage } from "./PreviewStage";
+import { UpgradeDialog } from "./UpgradeDialog";
 
 type CustomizeWorkspaceProps = {
   initialData: CustomizationData;
   carName: string;
+  planMode: PlanMode;
 };
+
+/** How long after entering the page the free-plan upsell appears (1m30s). */
+const UPSELL_DELAY_MS = 90_000;
 
 export function CustomizeWorkspace({
   initialData,
   carName,
+  planMode,
 }: CustomizeWorkspaceProps) {
   const {
     data,
@@ -44,12 +57,23 @@ export function CustomizeWorkspace({
   } = useCustomization({ initialData });
 
   const [compareOpen, setCompareOpen] = useState(false);
-  const [summaryOpen, setSummaryOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [pendingCategory, setPendingCategory] =
     useState<CustomizationCategory | null>(null);
   const [dontAskAgain, setDontAskAgain] = useState(false);
   const [skipSwitchConfirm, setSkipSwitchConfirm] = useState(false);
+
+  const isFree = planMode === "free";
+
+  // Free users get a gentle nudge toward upgrading a while after they land.
+  useEffect(() => {
+    if (!isFree) {
+      return;
+    }
+    const timer = setTimeout(() => setUpgradeOpen(true), UPSELL_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [isFree]);
 
   // Switching category checkpoints the build, so always confirm first (unless
   // the user opted out for the session).
@@ -78,16 +102,21 @@ export function CustomizeWorkspace({
   const activeMeta = CATEGORY_META[activeCategory];
   const pendingMeta = pendingCategory ? CATEGORY_META[pendingCategory] : null;
 
-  const summary = buildSummary(data);
+  const modCount = countSelections(data);
   const baseImageUrl = initialData.preview.imageUrl;
   const previewUrl = data.preview.imageUrl;
   const isGenerating = data.preview.status === "generating";
 
-  const canDownload = !!previewUrl && !isGenerating;
+  // Downloads are a top-up privilege; free users get the upsell instead.
+  const canDownload = !isFree && !!previewUrl && !isGenerating;
   const canCompare =
-    !!previewUrl && !!baseImageUrl && summary.count > 0 && !isGenerating;
+    !!previewUrl && !!baseImageUrl && modCount > 0 && !isGenerating;
 
   async function handleDownload() {
+    if (isFree) {
+      setUpgradeOpen(true);
+      return;
+    }
     if (!previewUrl) {
       return;
     }
@@ -117,8 +146,11 @@ export function CustomizeWorkspace({
           canCompare={canCompare}
           canDownload={canDownload}
           isDownloading={isDownloading}
+          isFree={isFree}
           onCompare={() => setCompareOpen(true)}
           onDownload={handleDownload}
+          onSave={save}
+          onReset={reset}
         />
 
         <MobileCategoryTabs
@@ -140,12 +172,6 @@ export function CustomizeWorkspace({
             onSelectOption={selectOption}
           />
         </div>
-
-        <BuildSummaryBar
-          count={summary.count}
-          total={summary.total}
-          onViewBuild={() => setSummaryOpen(true)}
-        />
       </main>
 
       {baseImageUrl && previewUrl && (
@@ -153,25 +179,10 @@ export function CustomizeWorkspace({
           open={compareOpen}
           beforeUrl={baseImageUrl}
           afterUrl={previewUrl}
-          modCount={summary.count}
+          modCount={modCount}
           onClose={() => setCompareOpen(false)}
         />
       )}
-
-      <BuildSummarySheet
-        open={summaryOpen}
-        data={data}
-        carName={carName}
-        count={summary.count}
-        total={summary.total}
-        canDownload={canDownload}
-        isDownloading={isDownloading}
-        isSaved={isSaved}
-        onDownload={handleDownload}
-        onSave={save}
-        onReset={reset}
-        onClose={() => setSummaryOpen(false)}
-      />
 
       <ConfirmDialog
         open={pendingCategory !== null}
@@ -200,6 +211,8 @@ export function CustomizeWorkspace({
         onConfirm={confirmCategorySwitch}
         onCancel={() => setPendingCategory(null)}
       />
+
+      <UpgradeDialog open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
     </div>
   );
 }
@@ -210,16 +223,22 @@ function TopBar({
   canCompare,
   canDownload,
   isDownloading,
+  isFree,
   onCompare,
   onDownload,
+  onSave,
+  onReset,
 }: {
   isSaved: boolean;
   carName: string;
   canCompare: boolean;
   canDownload: boolean;
   isDownloading: boolean;
+  isFree: boolean;
   onCompare: () => void;
   onDownload: () => void;
+  onSave: () => void;
+  onReset: () => void;
 }) {
   return (
     <header className="flex items-center justify-between gap-3 border-white/5 border-b px-4 py-3 sm:px-6 sm:py-4 lg:border-b-0">
@@ -242,6 +261,27 @@ function TopBar({
       <div className="flex shrink-0 items-center gap-2">
         <button
           type="button"
+          onClick={onSave}
+          disabled={isSaved}
+          aria-label="Save"
+          className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-sm text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 lg:hidden"
+        >
+          {isSaved ? (
+            <CheckIcon className="h-4 w-4" />
+          ) : (
+            <SaveIcon className="h-4 w-4" />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onReset}
+          aria-label="Reset"
+          className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-sm text-zinc-300 transition hover:bg-white/10 lg:hidden"
+        >
+          <ResetIcon className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
           onClick={onCompare}
           disabled={!canCompare}
           className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-medium text-sm text-zinc-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 sm:px-4"
@@ -252,11 +292,14 @@ function TopBar({
         <button
           type="button"
           onClick={onDownload}
-          disabled={!canDownload || isDownloading}
+          disabled={!isFree && (!canDownload || isDownloading)}
+          title={isFree ? "Add credits to download your build" : undefined}
           className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-blue-500 px-3 py-2 font-medium text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4"
         >
           {isDownloading ? (
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          ) : isFree ? (
+            <SparkleIcon className="h-4 w-4" />
           ) : (
             <DownloadIcon className="h-4 w-4" />
           )}
@@ -269,51 +312,18 @@ function TopBar({
   );
 }
 
-function BuildSummaryBar({
-  count,
-  total,
-  onViewBuild,
-}: {
-  count: number;
-  total: number;
-  onViewBuild: () => void;
-}) {
-  return (
-    <footer className="flex items-center justify-between gap-4 border-white/5 border-t bg-[#0a0912] px-4 py-3 sm:px-6 sm:py-4">
-      <div className="flex min-w-0 flex-col">
-        <span className="font-semibold text-sm">Build Summary</span>
-        <span className="text-violet-400 text-xs">
-          {count} {count === 1 ? "Item" : "Items"} · ${total.toLocaleString()}
-        </span>
-      </div>
-      <button
-        type="button"
-        onClick={onViewBuild}
-        className="flex shrink-0 items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-500 px-5 py-2.5 font-medium text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90 sm:px-6 sm:py-3"
-      >
-        View Build
-        <ArrowRightIcon className="h-4 w-4" />
-      </button>
-    </footer>
-  );
-}
-
-function buildSummary(data: CustomizationData): {
-  count: number;
-  total: number;
-} {
+/** Number of categories with a selected option in the current combination. */
+function countSelections(data: CustomizationData): number {
   let count = 0;
-  let total = 0;
 
   for (const category of CATEGORY_ORDER) {
     const option = findOptionInData(data, category, data.selections[category]);
     if (option) {
       count += 1;
-      total += option.price;
     }
   }
 
-  return { count, total };
+  return count;
 }
 
 function buildFileName(carName: string): string {

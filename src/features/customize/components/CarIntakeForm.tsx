@@ -7,11 +7,16 @@ import { fetchCustomizationOptions, uploadCarImage } from "../api/customizeApi";
 import { CATEGORY_ORDER } from "../core/customization-options/catalog";
 import { buildInitialDataFromOptions } from "../core/customization-options/generation/buildInitialData";
 import type { CustomizationData } from "../core/customization-options/types/CustomizationData";
+import type { PlanMode } from "../core/plan/planMode";
 
 type IntakeStatus = "idle" | "uploading" | "generating";
 
 type CarIntakeFormProps = {
-  onReady: (data: CustomizationData, carName: string) => void;
+  onReady: (
+    data: CustomizationData,
+    carName: string,
+    planMode: PlanMode,
+  ) => void;
 };
 
 const STATUS_LABEL: Record<Exclude<IntakeStatus, "idle">, string> = {
@@ -62,7 +67,7 @@ export function CarIntakeForm({ onReady }: CarIntakeFormProps) {
       ]);
       const data = buildInitialDataFromOptions(options, baseImageUrl);
 
-      onReady(data, name);
+      onReady(data, name, options.planMode);
     } catch (err) {
       setError(
         err instanceof Error

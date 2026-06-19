@@ -1,11 +1,9 @@
+import { getPlanLimits } from "@/server/domain/plan/plan-mode";
 import type {
   CustomizationOption,
   CustomizationOptionsResult,
   GenerateCustomizationOptionsInput,
 } from "./types";
-
-/** Number of mock options generated per category (within the 8-15 range). */
-const MOCK_OPTIONS_PER_CATEGORY = 10;
 
 /** Cycled palette so paint-like categories get plausible color swatches. */
 const MOCK_COLORS = [
@@ -66,10 +64,11 @@ export function generateMockOptions(
   input: GenerateCustomizationOptionsInput,
 ): CustomizationOptionsResult {
   const categories: Record<string, CustomizationOption[]> = {};
+  const optionsPerCategory = getPlanLimits(input.planMode).optionsPerCategory;
 
   for (const category of input.categories) {
     categories[category] = Array.from(
-      { length: MOCK_OPTIONS_PER_CATEGORY },
+      { length: optionsPerCategory },
       (_, index) => buildOption(category, index),
     );
   }
@@ -82,5 +81,6 @@ export function generateMockOptions(
       summary: `Mock profile for ${input.car} (MOCK_AI_CALLS enabled).`,
     },
     categories,
+    planMode: input.planMode,
   };
 }

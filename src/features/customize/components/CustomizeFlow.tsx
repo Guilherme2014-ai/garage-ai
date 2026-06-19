@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import type { CustomizationData } from "../core/customization-options/types/CustomizationData";
+import type { PlanMode } from "../core/plan/planMode";
 import { CarIntakeForm } from "./CarIntakeForm";
 import { CustomizeWorkspace } from "./CustomizeWorkspace";
 
 type ReadyState = {
   data: CustomizationData;
   carName: string;
+  planMode: PlanMode;
 };
 
 /**
@@ -19,11 +21,19 @@ export function CustomizeFlow() {
 
   if (!ready) {
     return (
-      <CarIntakeForm onReady={(data, carName) => setReady({ data, carName })} />
+      <CarIntakeForm
+        onReady={(data, carName, planMode) =>
+          setReady({ data, carName, planMode })
+        }
+      />
     );
   }
 
   return (
-    <CustomizeWorkspace initialData={ready.data} carName={ready.carName} />
+    <CustomizeWorkspace
+      initialData={ready.data}
+      carName={ready.carName}
+      planMode={ready.planMode}
+    />
   );
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {
   CATEGORY_META,
-  CATEGORY_ORDER,
+  getActiveCategories,
 } from "../core/customization-options/catalog";
 import type {
   CustomizationCategory,
@@ -55,7 +55,7 @@ export function CategoryPanel({
       </div>
 
       <div className="slim-scrollbar mt-4 flex-1 space-y-1.5 overflow-y-auto px-4 pb-4">
-        {CATEGORY_ORDER.map((category) => {
+        {getActiveCategories(data).map((category) => {
           const meta = CATEGORY_META[category];
           const content = data.categories[category];
           const Icon = CATEGORY_ICONS[category];

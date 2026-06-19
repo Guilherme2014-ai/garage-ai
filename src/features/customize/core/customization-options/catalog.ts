@@ -259,6 +259,19 @@ export const OPTION_CATALOG: Record<
   ],
 };
 
+/**
+ * Categories the user can actually customize, in display order. Driven by the
+ * data so plan-gated builds (e.g. the free plan's 3 categories) only surface
+ * the categories the backend generated options for.
+ */
+export function getActiveCategories(
+  data: CustomizationData,
+): CustomizationCategory[] {
+  return CATEGORY_ORDER.filter(
+    (category) => data.categories[category].items.length > 0,
+  );
+}
+
 /** Looks up the metadata for a selected option, if it exists in the catalog. */
 export function findOption(
   category: CustomizationCategory,

@@ -1,3 +1,5 @@
+import type { PlanMode } from "@/server/domain/plan/plan-mode";
+
 export interface UserEntity {
   id: string;
   email: string;
@@ -6,6 +8,7 @@ export interface UserEntity {
   image: string | null;
   provider: string | null;
   providerId: string | null;
+  planMode: PlanMode;
   createdAt: Date;
   updatedAt: Date;
 }

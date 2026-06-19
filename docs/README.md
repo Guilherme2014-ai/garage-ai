@@ -11,6 +11,9 @@ Documentation for the car customization feature.
   side: API routes, application services, WaveSpeed (LLM + image edit) providers,
   prompt building, Vercel Blob storage, the concurrency gate, and environment
   variables.
+- [Pricing & Plan Modes](./pricing-and-plan-modes.md) — plan modes (`free` /
+  `top-up`) and the privileges they gate, the Drizzle/Postgres `users` database,
+  backend plan gating, and the download/upsell behavior in the UI.
 
 ## Feature at a glance
 

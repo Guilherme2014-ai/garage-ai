@@ -1,11 +1,5 @@
+import { getPlanLimits } from "@/server/domain/plan/plan-mode";
 import type { GenerateCustomizationOptionsInput } from "./types";
-
-/** Maximum number of options the model must generate per category. */
-export const OPTIONS_COUNT_PER_CATEGORY = 12;
-
-/** Maximum number of categories the model must generate. */
-export const CATEGORIES_COUNT = 10;
-
 
 /**
  * System prompt: establishes the model as a domain expert and pins the output
@@ -47,8 +41,10 @@ export function buildSystemPrompt(): string {
 export function buildUserPrompt({
   car,
   categories,
+  planMode,
 }: GenerateCustomizationOptionsInput): string {
   const categoryList = categories.map((c) => `"${c}"`).join(", ");
+  const optionsPerCategory = getPlanLimits(planMode).optionsPerCategory;
 
   return [
     `Vehicle: ${car}`,
@@ -63,8 +59,8 @@ export function buildUserPrompt({
     "inside the car.",
     "",
     "Requirements:",
-    `- Generate EXACTLY ${CATEGORIES_COUNT} categories.`,
-    `- Provide EXACTLY ${OPTIONS_COUNT_PER_CATEGORY} options per category.`,
+    `- Generate options for EXACTLY these ${categories.length} categories.`,
+    `- Provide EXACTLY ${optionsPerCategory} options per category.`,
     "- Rank options from most relevant (rank 1) to least relevant, and order",
     "  the array to match the ranking.",
     "- Every option must describe a visible change in the photo. Exclude",

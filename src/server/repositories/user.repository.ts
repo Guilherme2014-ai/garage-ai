@@ -1,59 +1,120 @@
+import { and, eq } from "drizzle-orm";
 import type { UserEntity } from "@/server/domain/entities";
+import {
+  DEFAULT_PLAN_MODE,
+  isPlanMode,
+  type PlanMode,
+} from "@/server/domain/plan/plan-mode";
+import { db } from "@/server/infrastructure/database/db";
+import {
+  type NewUserRow,
+  type UserRow,
+  users,
+} from "@/server/infrastructure/database/schema";
 
-const users: UserEntity[] = [];
+/** Maps a raw `users` row into the domain {@link UserEntity}. */
+function toEntity(row: UserRow): UserEntity {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    password: row.password,
+    image: row.image,
+    provider: row.provider,
+    providerId: row.providerId,
+    planMode: isPlanMode(row.planMode) ? row.planMode : DEFAULT_PLAN_MODE,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
 
 export const userRepository = {
   async findAll(): Promise<UserEntity[]> {
-    return [...users];
+    const rows = await db.select().from(users);
+    return rows.map(toEntity);
   },
 
   async findByEmail(email: string): Promise<UserEntity | null> {
-    return users.find((u) => u.email === email) ?? null;
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    return row ? toEntity(row) : null;
   },
 
   async findById(id: string): Promise<UserEntity | null> {
-    return users.find((u) => u.id === id) ?? null;
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+    return row ? toEntity(row) : null;
   },
 
   async findByProviderId(
     provider: string,
     providerId: string,
   ): Promise<UserEntity | null> {
-    return (
-      users.find(
-        (u) => u.provider === provider && u.providerId === providerId,
-      ) ?? null
-    );
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(
+        and(eq(users.provider, provider), eq(users.providerId, providerId)),
+      )
+      .limit(1);
+    return row ? toEntity(row) : null;
   },
 
   async create(
-    userData: Omit<UserEntity, "id" | "createdAt" | "updatedAt">,
+    userData: Omit<
+      UserEntity,
+      "id" | "createdAt" | "updatedAt" | "planMode"
+    > & {
+      planMode?: PlanMode;
+    },
   ): Promise<UserEntity> {
-    const entity: UserEntity = {
-      ...userData,
-      id: crypto.randomUUID(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    const values: NewUserRow = {
+      email: userData.email,
+      name: userData.name,
+      password: userData.password,
+      image: userData.image,
+      provider: userData.provider,
+      providerId: userData.providerId,
+      ...(userData.planMode ? { planMode: userData.planMode } : {}),
     };
-    users.push(entity);
-    return entity;
+    const [row] = await db.insert(users).values(values).returning();
+    return toEntity(row);
   },
 
   async update(
     id: string,
     userData: Partial<UserEntity>,
   ): Promise<UserEntity | null> {
-    const index = users.findIndex((u) => u.id === id);
-    if (index === -1) return null;
+    const changes: Partial<NewUserRow> = {};
+    if (userData.email !== undefined) changes.email = userData.email;
+    if (userData.name !== undefined) changes.name = userData.name;
+    if (userData.password !== undefined) changes.password = userData.password;
+    if (userData.image !== undefined) changes.image = userData.image;
+    if (userData.provider !== undefined) changes.provider = userData.provider;
+    if (userData.providerId !== undefined)
+      changes.providerId = userData.providerId;
+    if (userData.planMode !== undefined) changes.planMode = userData.planMode;
+    changes.updatedAt = new Date();
 
-    users[index] = { ...users[index], ...userData, updatedAt: new Date() };
-    return users[index];
+    const [row] = await db
+      .update(users)
+      .set(changes)
+      .where(eq(users.id, id))
+      .returning();
+    return row ? toEntity(row) : null;
   },
 
   async delete(id: string): Promise<boolean> {
-    const index = users.findIndex((u) => u.id === id);
-    if (index === -1) return false;
-    users.splice(index, 1);
-    return true;
+    const deleted = await db
+      .delete(users)
+      .where(eq(users.id, id))
+      .returning({ id: users.id });
+    return deleted.length > 0;
   },
 };

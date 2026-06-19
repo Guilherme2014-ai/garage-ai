@@ -87,18 +87,14 @@ function OptionCard({
       <span className="mt-0.5 truncate text-[11px] text-zinc-500">
         {item.description}
       </span>
-      <span className="mt-2">
-        {isSelected ? (
+      {isSelected && (
+        <span className="mt-2">
           <span className="inline-flex items-center gap-1 rounded-md bg-gradient-to-r from-violet-600 to-blue-500 px-2 py-0.5 font-medium text-[11px] text-white">
             <CheckIcon className="h-3 w-3" />
             Selected
           </span>
-        ) : (
-          <span className="font-semibold text-sm text-violet-300">
-            {item.price === 0 ? "Included" : `$${item.price.toLocaleString()}`}
-          </span>
-        )}
-      </span>
+        </span>
+      )}
     </button>
   );
 }

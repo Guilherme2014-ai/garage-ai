@@ -1,12 +1,13 @@
 import { isMockAiEnabled } from "@/server/config/ai-mock";
 import { ValidationError } from "@/server/domain/errors";
+import {
+  DEFAULT_PLAN_MODE,
+  getPlanLimits,
+  isPlanMode,
+} from "@/server/domain/plan/plan-mode";
 import { generateText } from "@/server/infrastructure/wavespeed/wavespeed-llm";
 import { generateMockOptions } from "./mockOptions";
-import {
-  buildSystemPrompt,
-  buildUserPrompt,
-  OPTIONS_COUNT_PER_CATEGORY,
-} from "./promptBuilder";
+import { buildSystemPrompt, buildUserPrompt } from "./promptBuilder";
 import type {
   CustomizationOption,
   CustomizationOptionsResult,
@@ -30,6 +31,11 @@ function normalizeInput(
     throw new ValidationError("Categories must be an array");
   }
 
+  const planMode = isPlanMode(input.planMode)
+    ? input.planMode
+    : DEFAULT_PLAN_MODE;
+  const limits = getPlanLimits(planMode);
+
   const categories = Array.from(
     new Set(
       input.categories
@@ -37,13 +43,13 @@ function normalizeInput(
         .map((c) => c.trim().toLowerCase())
         .filter(Boolean),
     ),
-  );
+  ).slice(0, limits.maxCategories);
 
   if (categories.length === 0) {
     throw new ValidationError("At least one category is required");
   }
 
-  return { car, categories };
+  return { car, categories, planMode };
 }
 
 /**
@@ -119,6 +125,7 @@ function buildResult(
 ): CustomizationOptionsResult {
   const root = (parsed ?? {}) as Record<string, unknown>;
   const rawCategories = (root.categories ?? {}) as Record<string, unknown>;
+  const optionsPerCategory = getPlanLimits(input.planMode).optionsPerCategory;
 
   const categories: Record<string, CustomizationOption[]> = {};
 
@@ -135,15 +142,15 @@ function buildResult(
       .filter((option) => option.name && option.brand)
       .sort((a, b) => a.rank - b.rank);
 
-    if (options.length !== OPTIONS_COUNT_PER_CATEGORY) {
+    if (options.length < optionsPerCategory) {
       throw new Error(
-        `LLM did not generate exactly ${OPTIONS_COUNT_PER_CATEGORY} valid options for "${category}"`,
+        `LLM generated fewer than ${optionsPerCategory} valid options for "${category}"`,
       );
     }
 
-    // Keep at most OPTIONS_COUNT_PER_CATEGORY options, then normalize ranks to the final order.
+    // Keep the top `optionsPerCategory` options, then normalize ranks to order.
     categories[category] = options
-      .slice(0, OPTIONS_COUNT_PER_CATEGORY)
+      .slice(0, optionsPerCategory)
       .map((option, index) => ({ ...option, rank: index + 1 }));
   }
 
@@ -151,6 +158,7 @@ function buildResult(
     car: typeof root.car === "string" && root.car.trim() ? root.car : input.car,
     vehicleProfile: coerceVehicleProfile(root.vehicleProfile),
     categories,
+    planMode: input.planMode,
   };
 }
 

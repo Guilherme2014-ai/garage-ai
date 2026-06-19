@@ -2,7 +2,7 @@
 
 import {
   CATEGORY_META,
-  CATEGORY_ORDER,
+  getActiveCategories,
 } from "../core/customization-options/catalog";
 import type {
   CustomizationCategory,
@@ -28,7 +28,7 @@ export function MobileCategoryTabs({
 }: MobileCategoryTabsProps) {
   return (
     <div className="slim-scrollbar flex gap-2 overflow-x-auto border-white/5 border-b px-4 py-3 lg:hidden">
-      {CATEGORY_ORDER.map((category) => {
+      {getActiveCategories(data).map((category) => {
         const meta = CATEGORY_META[category];
         const Icon = CATEGORY_ICONS[category];
         const isActive = category === activeCategory;
