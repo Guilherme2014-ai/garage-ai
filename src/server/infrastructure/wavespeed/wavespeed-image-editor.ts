@@ -8,7 +8,7 @@ export interface EditImageOptions {
   imageUrls: string[];
   outputFormat?: "png" | "jpeg" | "webp";
   resolution?: "0.5k" | "1k" | "2k" | "4k";
-  aspectRatio?: "3:4" | "1:1" | "4:3" | "9:16";
+  aspectRatio?: "3:2" | "1:1" | "4:3" | "9:16";
 }
 
 /**
@@ -21,7 +21,7 @@ export async function editImage({
   imageUrls,
   outputFormat = "png",
   resolution = "0.5k",
-  aspectRatio = "3:4",
+  aspectRatio = "3:2",
 }: EditImageOptions): Promise<string> {
   const client = new Client();
 

@@ -1,12 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 
+/** Only allow same-origin relative paths as a post-login destination. */
+function safeCallbackUrl(value: string | null): string {
+  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
+}
+
 export function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = safeCallbackUrl(searchParams.get("callbackUrl"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +34,7 @@ export function SignInForm() {
       if (result?.error) {
         setError("Invalid email or password");
       } else {
-        router.push("/");
+        router.push(callbackUrl);
         router.refresh();
       }
     } catch {

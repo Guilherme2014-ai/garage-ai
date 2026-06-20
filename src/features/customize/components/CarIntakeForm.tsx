@@ -2,11 +2,16 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useId, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useId, useState } from "react";
+import { useAuth } from "@/features/auth";
 import { fetchCustomizationOptions, uploadCarImage } from "../api/customizeApi";
 import { buildInitialDataFromOptions } from "../core/customization-options/generation/buildInitialData";
 import type { CustomizationData } from "../core/customization-options/types/CustomizationData";
 import type { PlanMode } from "../core/plan/planMode";
+
+/** Sends unauthenticated users to sign in, returning here once they're in. */
+const SIGN_IN_URL = `/auth/signin?callbackUrl=${encodeURIComponent("/customize")}`;
 
 type IntakeStatus = "idle" | "uploading" | "generating";
 
@@ -26,6 +31,8 @@ const STATUS_LABEL: Record<Exclude<IntakeStatus, "idle">, string> = {
 };
 
 export function CarIntakeForm({ onReady }: CarIntakeFormProps) {
+  const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
   const fileInputId = useId();
   const [carName, setCarName] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -34,6 +41,20 @@ export function CarIntakeForm({ onReady }: CarIntakeFormProps) {
   const [error, setError] = useState<string | null>(null);
 
   const busy = status !== "idle";
+
+  /**
+   * Customizing requires an account (the upload/options routes are auth-gated).
+   * Send signed-out users to sign in instead of letting the request 401. Returns
+   * whether the caller may proceed. While the session is still resolving we let
+   * it through; the submit handler re-checks before any network call.
+   */
+  const requireAuth = useCallback((): boolean => {
+    if (isLoading || isAuthenticated) {
+      return true;
+    }
+    router.push(SIGN_IN_URL);
+    return false;
+  }, [isAuthenticated, isLoading, router]);
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const selected = event.target.files?.[0] ?? null;
@@ -47,6 +68,10 @@ export function CarIntakeForm({ onReady }: CarIntakeFormProps) {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+
+    if (!requireAuth()) {
+      return;
+    }
 
     const name = carName.trim();
     if (!name) {
@@ -157,6 +182,13 @@ export function CarIntakeForm({ onReady }: CarIntakeFormProps) {
                 id={fileInputId}
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
+                onClick={(event) => {
+                  // Redirect signed-out users to sign in instead of opening the
+                  // file picker (the upload route is auth-gated).
+                  if (!requireAuth()) {
+                    event.preventDefault();
+                  }
+                }}
                 onChange={handleFileChange}
                 disabled={busy}
                 className="hidden"
