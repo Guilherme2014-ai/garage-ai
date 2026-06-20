@@ -224,7 +224,7 @@ export const customizationOptionsService = {
       model: LLM_MODEL,
       temperature: LLM_TEMPERATURE,
       maxTokens: LLM_MAX_TOKENS,
-      priority: "throughput",
+      priority: "latency",
       reasoning: false,
     });
 

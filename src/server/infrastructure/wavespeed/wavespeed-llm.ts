@@ -20,7 +20,7 @@ export async function generateText({
   model = DEFAULT_LLM,
   temperature,
   maxTokens,
-  priority = "throughput",
+  priority = "latency",
   reasoning = false,
 }: GenerateTextOptions): Promise<string> {
   const client = new Client();
