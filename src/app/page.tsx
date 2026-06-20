@@ -7,7 +7,6 @@ import { Gallery } from "@/features/landing/components/gallery";
 const NAV_LINKS = [
   { label: "Features", href: "#features" },
   { label: "Gallery", href: "#gallery" },
-  { label: "Pricing", href: "#pricing" },
   { label: "About", href: "#about" },
 ];
 
@@ -23,9 +22,9 @@ const STEPS = [
     icon: WrenchIcon,
   },
   {
-    title: "Real-Time Preview",
-    description: "See your car transform instantly in 3D.",
-    icon: CubeIcon,
+    title: "AI Preview",
+    description: "Watch AI reimagine your build in seconds.",
+    icon: SparkleIcon,
   },
   {
     title: "Save & Share",
@@ -46,14 +45,14 @@ const FEATURES = [
     icon: PaletteIcon,
   },
   {
-    title: "Realistic 3D Rendering",
-    description: "Photorealistic quality with every detail.",
-    icon: CubeIcon,
+    title: "AI-Powered Renders",
+    description: "Photorealistic results from a single photo.",
+    icon: SparkleIcon,
   },
   {
     title: "Save & Compare",
     description: "Save multiple builds and compare side by side.",
-    icon: PhoneIcon,
+    icon: LayersIcon,
   },
   {
     title: "Share with Community",
@@ -405,7 +404,7 @@ function WrenchIcon({ className }: IconProps) {
   );
 }
 
-function CubeIcon({ className }: IconProps) {
+function SparkleIcon({ className }: IconProps) {
   return (
     <svg
       className={className}
@@ -417,9 +416,9 @@ function CubeIcon({ className }: IconProps) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-      <path d="m3.3 7 8.7 5 8.7-5" />
-      <path d="M12 22V12" />
+      <path d="M12 3v4M12 17v4M5 12H1M23 12h-4" />
+      <path d="M9.5 9.5 6.5 6.5M17.5 17.5l-3-3M14.5 9.5l3-3M6.5 17.5l3-3" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
@@ -487,7 +486,7 @@ function PaletteIcon({ className }: IconProps) {
   );
 }
 
-function PhoneIcon({ className }: IconProps) {
+function LayersIcon({ className }: IconProps) {
   return (
     <svg
       className={className}
@@ -499,8 +498,9 @@ function PhoneIcon({ className }: IconProps) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
-      <path d="M12 18h.01" />
+      <path d="m12 2 9 5-9 5-9-5 9-5z" />
+      <path d="m3 12 9 5 9-5" />
+      <path d="m3 17 9 5 9-5" />
     </svg>
   );
 }
