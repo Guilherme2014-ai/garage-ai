@@ -3,8 +3,12 @@ import type { PlanMode } from "@/server/domain/plan/plan-mode";
 export interface GenerateCustomizationOptionsInput {
   /** Vehicle name/model, e.g. "Nissan Skyline GT-R R34". */
   car: string;
-  /** Categories to generate options for, e.g. ["wheels", "paint", "exhausts"]. */
-  categories: string[];
+  /**
+   * Client-supplied categories. Only consulted in mock/testing mode — real
+   * generation owns its category set on the backend (see `categories.ts`), so
+   * this is optional and ignored for live LLM calls.
+   */
+  categories?: string[];
   /** Plan mode the request is served under; gates category/option counts. */
   planMode: PlanMode;
 }

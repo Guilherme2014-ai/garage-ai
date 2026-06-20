@@ -1,9 +1,8 @@
 "use client";
 
-import {
-  type CombinationSelections,
-  CustomizationCategory,
-  type CustomizationData,
+import type {
+  CombinationSelections,
+  CustomizationData,
 } from "../core/customization-options/types/CustomizationData";
 import { findOptionInData } from "../core/customization-options/utils/findOptionInData";
 import { RedoIcon, SparkleIcon, UndoIcon } from "./icons";
@@ -29,11 +28,7 @@ export function PreviewStage({
   onForward,
 }: PreviewStageProps) {
   const isGenerating = data.preview.status === "generating";
-  const paint = findOptionInData(
-    data,
-    CustomizationCategory.PAINT,
-    data.selections.paint,
-  );
+  const paint = findOptionInData(data, "paint", data.selections.paint);
   const paintColor = paint?.swatch ?? BASE_PAINT;
   const modCount = countMods(data.selections);
   const imageUrl = data.preview.imageUrl;

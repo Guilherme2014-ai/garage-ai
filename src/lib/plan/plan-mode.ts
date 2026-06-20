@@ -11,7 +11,7 @@ export const DEFAULT_PLAN_MODE: PlanMode = "free";
 /** Privileges granted by each plan mode. */
 export interface PlanLimits {
   /** Maximum number of customization categories generated. */
-  maxCategories: number;
+  categoriesCount: number;
   /** Number of options generated per category. */
   optionsPerCategory: number;
   /** Whether the user may download the generated build image. */
@@ -20,13 +20,13 @@ export interface PlanLimits {
 
 export const PLAN_LIMITS: Record<PlanMode, PlanLimits> = {
   free: {
-    maxCategories: 3,
-    optionsPerCategory: 5,
+    categoriesCount: 3,
+    optionsPerCategory: 3,
     canDownload: false,
   },
   "top-up": {
-    maxCategories: 5,
-    optionsPerCategory: 12,
+    categoriesCount: 10,
+    optionsPerCategory: 5,
     canDownload: true,
   },
 };

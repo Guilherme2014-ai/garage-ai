@@ -66,7 +66,7 @@ export function generateMockOptions(
   const categories: Record<string, CustomizationOption[]> = {};
   const optionsPerCategory = getPlanLimits(input.planMode).optionsPerCategory;
 
-  for (const category of input.categories) {
+  for (const category of input.categories ?? []) {
     categories[category] = Array.from(
       { length: optionsPerCategory },
       (_, index) => buildOption(category, index),

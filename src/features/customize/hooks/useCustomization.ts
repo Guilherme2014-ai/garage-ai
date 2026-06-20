@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { chargeCategory } from "../api/creditsApi";
 import { editCarImage } from "../api/customizeApi";
 import { CustomizationDataCoordinator } from "../core/customization-options/CustomizationData.coordinator";
-import { CATEGORY_ORDER } from "../core/customization-options/catalog";
+import { getActiveCategories } from "../core/customization-options/catalog";
 import type { BuildSnapshot } from "../core/customization-options/types/BuildSnapshot";
 import type {
   CustomizationCategory,
@@ -93,7 +93,7 @@ export function useCustomization({
     coordinator.getData(),
   );
   const [activeCategory, setActiveCategory] = useState<CustomizationCategory>(
-    CATEGORY_ORDER[0],
+    () => getActiveCategories(coordinator.getData())[0] ?? "",
   );
   const [nav, setNav] = useState<NavState>(() => readNav(coordinator));
   const [credits, setCredits] = useState(initialCredits);
@@ -144,7 +144,10 @@ export function useCustomization({
   // resumed build the category is already paid and its previews cached, so this
   // neither re-charges nor regenerates.
   useEffect(() => {
-    const first = CATEGORY_ORDER[0];
+    const first = getActiveCategories(coordinator.getData())[0];
+    if (!first) {
+      return;
+    }
     setActiveCategory(first);
     void guardEnter(first).then((allowed) => {
       if (allowed) {

@@ -4,19 +4,18 @@ export { CombinationTracker } from "./core/customization-options/Combination.tra
 export { CombinationsStringCache } from "./core/customization-options/CombinationsStringCache";
 export { CustomizationDataCoordinator } from "./core/customization-options/CustomizationData.coordinator";
 export {
-  CATEGORY_META,
-  CATEGORY_ORDER,
-  createInitialCustomizationData,
-  findOption,
-  OPTION_CATALOG,
+  type CategoryMeta,
+  categoryLabel,
+  getActiveCategories,
+  getCategoryMeta,
 } from "./core/customization-options/catalog";
-export {
-  type CombinationSelections,
+export type {
+  CombinationSelections,
   CustomizationCategory,
-  type CustomizationCategoryContent,
-  type CustomizationCategoryItem,
-  type CustomizationData,
-  type GeneratedPreview,
-  type GenerationStatus,
+  CustomizationCategoryContent,
+  CustomizationCategoryItem,
+  CustomizationData,
+  GeneratedPreview,
+  GenerationStatus,
 } from "./core/customization-options/types/CustomizationData";
 export { useCustomization } from "./hooks/useCustomization";

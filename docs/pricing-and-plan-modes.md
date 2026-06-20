@@ -190,9 +190,10 @@ CarIntakeForm.onReady(data, carName, planMode)
 ```
 
 - **Categories shown.** `getActiveCategories(data)` (in
-  `core/customization-options/catalog.ts`) returns the `CATEGORY_ORDER`
-  categories that actually have options, so free users see exactly their three.
-  The category nav in `CategoryPanel` and `MobileCategoryTabs` is driven by it.
+  `core/customization-options/catalog.ts`) returns the LLM-generated categories
+  that actually have options, in response order, so free users see exactly their
+  three. The category nav in `CategoryPanel` and `MobileCategoryTabs` is driven
+  by it.
 - **Download gating.** `canDownload` is `false` for free users; the Download
   button stays interactive but opens the buy-credits dialog instead of
   downloading (`handleDownload` short-circuits when `isFree`).

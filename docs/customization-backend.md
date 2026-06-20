@@ -41,12 +41,19 @@ Seeds the flow with the user's base car photo.
 
 ### `POST /api/customize/options`
 
-Generates vehicle-aware, ranked options per category via the LLM. The category
-and per-category option counts are **gated by the caller's plan mode** (see
+Generates vehicle-aware, ranked options via the LLM. The **LLM chooses the
+categories itself** (per-vehicle), just like the options — the backend does not
+dictate a category set. Both the number of categories and the per-category option
+count are **gated by the caller's plan mode** (`maxCategories` /
+`optionsPerCategory`; see
 [`pricing-and-plan-modes.md`](./pricing-and-plan-modes.md)); the route resolves
-the plan from the signed-in user, so it is not part of the request body.
+the plan from the signed-in user, so it is not part of the request body. The
+canonical list in `customization-options/categories.ts` is **mock-only** (it
+backs `MOCK_AI_CALLS` runs); the `categories` body field is optional and only
+seeds mock mode.
 
-- Request (JSON): `{ car: string, categories: string[] }`.
+- Request (JSON): `{ car: string, categories?: string[] }` (`categories`
+  mock-only).
 - Response `201`:
 
 ```jsonc
@@ -67,7 +74,7 @@ the plan from the signed-in user, so it is not part of the request body.
       }
       // exactly `optionsPerCategory` options for the plan (free 5, top-up 12), ranked
     ]
-    // one key per requested category (capped to the plan's maxCategories)
+    // exactly `maxCategories` keys — slugs the LLM chose for this vehicle
   },
   "planMode": "free" // or "top-up" — the plan the options were generated under
 }
@@ -92,16 +99,20 @@ Applies a single option to a car image. The prompt is built **server-side** from
 
 `src/server/application/services/customization-options/`
 
-1. `normalizeInput`: trims the car name, lowercases/dedupes categories, defaults
-   the plan mode, and **caps the categories to the plan's `maxCategories`**.
-2. Builds the system + user prompt (see Prompts), asking for exactly the plan's
-   `optionsPerCategory` options.
-3. Calls `generateText` (WaveSpeed `any-llm`).
+1. `normalizeInput`: trims the car name, defaults the plan mode, and
+   lowercases/dedupes any client-sent categories (mock-only, capped to the plan's
+   `maxCategories`).
+2. Builds the system + user prompt (see Prompts), telling the model to choose
+   exactly `maxCategories` vehicle-appropriate categories and the plan's
+   `optionsPerCategory` options each. (Mock mode skips the LLM and uses the
+   client's categories, or the `categories.ts` fallback.)
+3. Calls `generateText` (the provider selected by `LLM_PROVIDER`; see AI Providers).
 4. `extractJson`: strips code fences and parses the first `{...}` block.
-5. `buildResult`: per requested category, coerces options, drops entries missing
-   `name`/`brand`, re-ranks to array order, and **requires at least the plan's
-   `optionsPerCategory`** valid options (then slices to it) — otherwise it
-   throws. The result is stamped with `planMode`.
+5. `buildResult`: reads the **dynamic** category keys the LLM returned, slugifies
+   each, coerces options, drops entries missing `name`/`brand`, re-ranks to array
+   order, keeps only categories meeting the plan's `optionsPerCategory` bar, and
+   caps the set at `maxCategories`. Throws only if no valid category survives.
+   The result is stamped with `planMode`.
 
 Plan limits come from `getPlanLimits(planMode)`; see
 [`pricing-and-plan-modes.md`](./pricing-and-plan-modes.md).
@@ -123,8 +134,9 @@ Plan limits come from `getPlanLimits(planMode)`; see
 - `buildSystemPrompt()`: frames the model as a senior automotive customization
   specialist with cross-scene knowledge (JDM, Euro, Muscle, Supercar, Track,
   Drift, Stance) and demands **valid JSON only**.
-- `buildUserPrompt({ car, categories, planMode })`: injects the vehicle +
-  categories, asks for exactly the plan's `optionsPerCategory` options, and pins
+- `buildUserPrompt({ car, planMode })`: injects the vehicle and tells the model
+  to choose exactly `maxCategories` vehicle-appropriate category slugs itself,
+  asks for exactly the plan's `optionsPerCategory` options each, and pins
   the exact JSON schema, including the rules for `visualDescription` (a concise,
   purely visual phrase for the image model — no brand names), `price` (USD
   integer estimate), and optional `colorHex`.
@@ -145,9 +157,30 @@ You are a car modification image model that edits an existing photo of a car.
 - Produce a photorealistic result consistent with the original photo.
 ```
 
-## AI Providers (WaveSpeed)
+## AI Providers
 
-`src/server/infrastructure/wavespeed/`
+### Text LLM provider selection
+
+`src/server/infrastructure/llm/`
+
+- `types.ts` — provider-agnostic `GenerateTextOptions` / `GenerateText` contract
+  both text providers implement.
+- `index.ts` — exports `generateText()`, which dispatches to the provider chosen
+  by the `LLM_PROVIDER` env var: `"wavespeed"` (default) or `"openrouter"`.
+  Unknown/unset values fall back to WaveSpeed, preserving existing behavior.
+- Consumers (e.g. `customization-options.service.ts`) import `generateText` from
+  `@/server/infrastructure/llm` rather than a specific vendor module. The model
+  can be overridden globally with `LLM_MODEL`; when unset each provider uses its
+  own default.
+
+#### OpenRouter (`src/server/infrastructure/openrouter/openrouter-llm.ts`)
+
+- `generateText()` calls OpenRouter's chat-completions endpoint via
+  `@openrouter/sdk` (default model `openai/gpt-4o-mini`), reading
+  `OPENROUTER_API_KEY` from the environment. The `systemPrompt`/`prompt` are sent
+  as `system`/`user` messages and the first choice's text content is returned.
+
+### WaveSpeed (`src/server/infrastructure/wavespeed/`)
 
 - `wavespeed-llm.ts` — `generateText()` calls model endpoint
   `wavespeed-ai/any-llm` (default LLM `openai/gpt-5-chat`). Returns the completion

@@ -1,4 +1,4 @@
-import { CustomizationCategory } from "../core/customization-options/types/CustomizationData";
+import type { CustomizationCategory } from "../core/customization-options/types/CustomizationData";
 
 export type IconProps = { className?: string };
 
@@ -374,21 +374,29 @@ export function CarBodyIcon({ className }: IconProps) {
   );
 }
 
+type IconComponent = (props: IconProps) => React.ReactNode;
+
 /**
- * Maps a category to its rail icon, keeping the UI mapping out of the core
- * domain layer.
+ * Icons for the categories the model commonly returns. Categories are
+ * LLM-generated (open-ended), so unknown slugs fall back to a generic icon via
+ * {@link getCategoryIcon}.
  */
-export const CATEGORY_ICONS: Record<
-  CustomizationCategory,
-  (props: IconProps) => React.ReactNode
-> = {
-  [CustomizationCategory.WHEELS]: WheelIcon,
-  [CustomizationCategory.PAINT]: PaletteIcon,
-  [CustomizationCategory.SUSPENSION]: SuspensionIcon,
-  [CustomizationCategory.BODY_KITS]: CarIcon,
-  [CustomizationCategory.LIGHTING]: LightIcon,
-  [CustomizationCategory.SPOILERS]: SpoilerIcon,
+const CATEGORY_ICON_MAP: Record<string, IconComponent> = {
+  wheels: WheelIcon,
+  paint: PaletteIcon,
+  suspension: SuspensionIcon,
+  "ride-height": SuspensionIcon,
+  "body-kits": CarIcon,
+  lighting: LightIcon,
+  spoilers: SpoilerIcon,
 };
+
+/** Resolves a category's rail icon, falling back to a generic icon. */
+export function getCategoryIcon(
+  category: CustomizationCategory,
+): IconComponent {
+  return CATEGORY_ICON_MAP[category] ?? SparkleIcon;
+}
 
 /** Stylized rim graphic used to preview wheel finishes. */
 export function WheelGraphic({ color, size }: { color: string; size: number }) {

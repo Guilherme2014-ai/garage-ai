@@ -1,19 +1,9 @@
 import { Client } from "wavespeed";
+import type { GenerateTextOptions } from "../llm/types";
 import { runWithWaveSpeedLimit } from "./wavespeed-concurrency";
 
 const MODEL_ENDPOINT = "wavespeed-ai/any-llm";
 const DEFAULT_LLM = "openai/gpt-5-chat";
-
-export interface GenerateTextOptions {
-  prompt: string;
-  systemPrompt?: string;
-  /** Underlying LLM to route to (e.g. "openai/gpt-5-chat"). */
-  model?: string;
-  temperature?: number;
-  maxTokens?: number;
-  priority?: "latency" | "throughput";
-  reasoning?: boolean;
-}
 
 /**
  * Generates text via WaveSpeed's `any-llm` endpoint and returns the raw

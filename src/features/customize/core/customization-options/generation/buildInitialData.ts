@@ -1,7 +1,5 @@
 import type { ApiCustomizationOptionsResult } from "../../../api/customizeApi";
-import { CATEGORY_ORDER } from "../catalog";
 import type {
-  CustomizationCategory,
   CustomizationCategoryContent,
   CustomizationCategoryItem,
   CustomizationData,
@@ -53,22 +51,19 @@ function toItem(
 
 /**
  * Maps the LLM `/api/customize/options` response into the {@link CustomizationData}
- * the UI consumes. All categories are marked `generated` up-front (a single LLM
- * call produced them), and the preview starts at the user's uploaded photo.
+ * the UI consumes. The categories are whatever the model generated for this
+ * vehicle (keys preserved in response order); all are marked `generated` up-front
+ * (a single LLM call produced them), and the preview starts at the user's photo.
  */
 export function buildInitialDataFromOptions(
   result: ApiCustomizationOptionsResult,
   baseImageUrl: string,
 ): CustomizationData {
-  const categories = {} as Record<
-    CustomizationCategory,
-    CustomizationCategoryContent
-  >;
+  const categories: Record<string, CustomizationCategoryContent> = {};
 
-  for (const category of CATEGORY_ORDER) {
-    const rawOptions = result.categories[category] ?? [];
+  for (const [category, rawOptions] of Object.entries(result.categories)) {
     const usedSlugs = new Set<string>();
-    const items = rawOptions.map((option, index) =>
+    const items = (rawOptions ?? []).map((option, index) =>
       toItem(option, index, usedSlugs),
     );
 

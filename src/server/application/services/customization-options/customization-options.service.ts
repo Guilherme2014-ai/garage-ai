@@ -4,8 +4,10 @@ import {
   DEFAULT_PLAN_MODE,
   getPlanLimits,
   isPlanMode,
+  type PlanMode,
 } from "@/server/domain/plan/plan-mode";
-import { generateText } from "@/server/infrastructure/wavespeed/wavespeed-llm";
+import { generateText } from "@/server/infrastructure/llm";
+import { getCategoriesForPlan } from "./categories";
 import { generateMockOptions } from "./mockOptions";
 import { buildSystemPrompt, buildUserPrompt } from "./promptBuilder";
 import type {
@@ -15,19 +17,31 @@ import type {
   VehicleProfile,
 } from "./types";
 
-const LLM_MODEL = "openai/gpt-5-chat";
+/**
+ * Optional model override. When unset, the active provider (see
+ * `infrastructure/llm`) applies its own default model, so the right id is used
+ * for whichever of WaveSpeed / OpenRouter is selected via `LLM_PROVIDER`.
+ */
+const LLM_MODEL = process.env.LLM_MODEL?.trim() || undefined;
 const LLM_MAX_TOKENS = 8000;
 const LLM_TEMPERATURE = 0.7;
 
+interface NormalizedInput {
+  car: string;
+  planMode: PlanMode;
+  /** Client-supplied categories — only used in mock mode; may be empty. */
+  requestedCategories: string[];
+}
+
 function normalizeInput(
   input: GenerateCustomizationOptionsInput,
-): GenerateCustomizationOptionsInput {
+): NormalizedInput {
   const car = input.car?.trim();
   if (!car) {
     throw new ValidationError("A car name/model is required");
   }
 
-  if (!Array.isArray(input.categories)) {
+  if (input.categories !== undefined && !Array.isArray(input.categories)) {
     throw new ValidationError("Categories must be an array");
   }
 
@@ -36,20 +50,16 @@ function normalizeInput(
     : DEFAULT_PLAN_MODE;
   const limits = getPlanLimits(planMode);
 
-  const categories = Array.from(
+  const requestedCategories = Array.from(
     new Set(
-      input.categories
+      (input.categories ?? [])
         .filter((c): c is string => typeof c === "string")
         .map((c) => c.trim().toLowerCase())
         .filter(Boolean),
     ),
-  ).slice(0, limits.maxCategories);
+  ).slice(0, limits.categoriesCount);
 
-  if (categories.length === 0) {
-    throw new ValidationError("At least one category is required");
-  }
-
-  return { car, categories, planMode };
+  return { car, planMode, requestedCategories };
 }
 
 /**
@@ -119,22 +129,43 @@ function coerceVehicleProfile(value: unknown): VehicleProfile {
   };
 }
 
+interface ResultContext {
+  car: string;
+  planMode: PlanMode;
+}
+
+/** Normalizes an LLM-chosen category name into a clean lowercase slug. */
+function slugifyCategory(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * The LLM both chooses the categories and fills their options, so the response
+ * keys are dynamic. We take the categories it returned (in order), keep the ones
+ * that meet the plan's per-category option bar, and cap them at `maxCategories`.
+ */
 function buildResult(
   parsed: unknown,
-  input: GenerateCustomizationOptionsInput,
+  context: ResultContext,
 ): CustomizationOptionsResult {
   const root = (parsed ?? {}) as Record<string, unknown>;
   const rawCategories = (root.categories ?? {}) as Record<string, unknown>;
-  const optionsPerCategory = getPlanLimits(input.planMode).optionsPerCategory;
+  const { categoriesCount: maxCategories, optionsPerCategory } = getPlanLimits(
+    context.planMode,
+  );
 
   const categories: Record<string, CustomizationOption[]> = {};
 
-  for (const category of input.categories) {
-    const list = rawCategories[category];
-    if (!Array.isArray(list) || list.length === 0) {
-      throw new Error(
-        `LLM response missing options for category "${category}"`,
-      );
+  for (const [rawKey, list] of Object.entries(rawCategories)) {
+    if (Object.keys(categories).length >= maxCategories) break;
+
+    const slug = slugifyCategory(rawKey);
+    if (!slug || categories[slug] || !Array.isArray(list)) {
+      continue;
     }
 
     const options = list
@@ -143,42 +174,52 @@ function buildResult(
       .sort((a, b) => a.rank - b.rank);
 
     if (options.length < optionsPerCategory) {
-      throw new Error(
-        `LLM generated fewer than ${optionsPerCategory} valid options for "${category}"`,
-      );
+      continue;
     }
 
     // Keep the top `optionsPerCategory` options, then normalize ranks to order.
-    categories[category] = options
+    categories[slug] = options
       .slice(0, optionsPerCategory)
       .map((option, index) => ({ ...option, rank: index + 1 }));
   }
 
+  if (Object.keys(categories).length === 0) {
+    throw new Error("LLM response contained no valid categories");
+  }
+
   return {
-    car: typeof root.car === "string" && root.car.trim() ? root.car : input.car,
+    car:
+      typeof root.car === "string" && root.car.trim() ? root.car : context.car,
     vehicleProfile: coerceVehicleProfile(root.vehicleProfile),
     categories,
-    planMode: input.planMode,
+    planMode: context.planMode,
   };
 }
 
 export const customizationOptionsService = {
   /**
-   * Generates vehicle-aware, ranked customization options per category using
-   * the WaveSpeed LLM. Validates input, builds the prompt, calls the model, and
-   * parses/validates the JSON response into a typed structure.
+   * Generates vehicle-aware, ranked customization options using the configured
+   * LLM. The model chooses both the categories and their options (capped by the
+   * plan's `maxCategories` / `optionsPerCategory` limits); the backend does not
+   * dictate the category set. The client-supplied categories only seed mock mode.
+   * Builds the prompt, calls the model, and parses/validates the JSON response.
    */
   async generateOptions(
     rawInput: GenerateCustomizationOptionsInput,
   ): Promise<CustomizationOptionsResult> {
-    const input = normalizeInput(rawInput);
+    const { car, planMode, requestedCategories } = normalizeInput(rawInput);
 
     if (isMockAiEnabled()) {
-      return generateMockOptions(input);
+      // Mock mode honors the client's categories (their only purpose); when none
+      // were sent it falls back to the canonical mock catalog.
+      const categories = requestedCategories.length
+        ? requestedCategories
+        : getCategoriesForPlan(planMode).map((c) => c.slug);
+      return generateMockOptions({ car, categories, planMode });
     }
 
     const completion = await generateText({
-      prompt: buildUserPrompt(input),
+      prompt: buildUserPrompt({ car, planMode }),
       systemPrompt: buildSystemPrompt(),
       model: LLM_MODEL,
       temperature: LLM_TEMPERATURE,
@@ -188,6 +229,6 @@ export const customizationOptionsService = {
     });
 
     const parsed = extractJson(completion);
-    return buildResult(parsed, input);
+    return buildResult(parsed, { car, planMode });
   },
 };

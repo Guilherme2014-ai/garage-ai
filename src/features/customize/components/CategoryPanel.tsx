@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import {
-  CATEGORY_META,
   getActiveCategories,
+  getCategoryMeta,
 } from "../core/customization-options/catalog";
 import type {
   CustomizationCategory,
@@ -12,9 +12,9 @@ import type {
 import { findOptionInData } from "../core/customization-options/utils/findOptionInData";
 import {
   ArrowLeftIcon,
-  CATEGORY_ICONS,
   CheckIcon,
   ChevronRightIcon,
+  getCategoryIcon,
   ResetIcon,
   SaveIcon,
 } from "./icons";
@@ -58,9 +58,9 @@ export function CategoryPanel({
 
       <div className="slim-scrollbar mt-4 flex-1 space-y-1.5 overflow-y-auto px-4 pb-4">
         {getActiveCategories(data).map((category) => {
-          const meta = CATEGORY_META[category];
+          const meta = getCategoryMeta(category);
           const content = data.categories[category];
-          const Icon = CATEGORY_ICONS[category];
+          const Icon = getCategoryIcon(category);
           const isActive = category === activeCategory;
           const selected = findOptionInData(
             data,

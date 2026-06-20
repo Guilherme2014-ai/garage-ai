@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchCredits } from "../api/creditsApi";
 import { CREDITS_PER_CATEGORY } from "../core/credits/credits";
 import {
-  CATEGORY_META,
-  CATEGORY_ORDER,
+  getActiveCategories,
+  getCategoryMeta,
 } from "../core/customization-options/catalog";
 import type { BuildSnapshot } from "../core/customization-options/types/BuildSnapshot";
 import type {
@@ -181,8 +181,8 @@ export function CustomizeWorkspace({
     setPendingCategory(null);
   }
 
-  const activeMeta = CATEGORY_META[activeCategory];
-  const pendingMeta = pendingCategory ? CATEGORY_META[pendingCategory] : null;
+  const activeMeta = getCategoryMeta(activeCategory);
+  const pendingMeta = pendingCategory ? getCategoryMeta(pendingCategory) : null;
 
   const modCount = countSelections(data);
   const previewUrl = data.preview.imageUrl;
@@ -427,7 +427,7 @@ function TopBar({
 function countSelections(data: CustomizationData): number {
   let count = 0;
 
-  for (const category of CATEGORY_ORDER) {
+  for (const category of getActiveCategories(data)) {
     const option = findOptionInData(data, category, data.selections[category]);
     if (option) {
       count += 1;

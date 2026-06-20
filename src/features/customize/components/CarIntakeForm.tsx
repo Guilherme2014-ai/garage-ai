@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useId, useState } from "react";
 import { fetchCustomizationOptions, uploadCarImage } from "../api/customizeApi";
-import { CATEGORY_ORDER } from "../core/customization-options/catalog";
 import { buildInitialDataFromOptions } from "../core/customization-options/generation/buildInitialData";
 import type { CustomizationData } from "../core/customization-options/types/CustomizationData";
 import type { PlanMode } from "../core/plan/planMode";
@@ -64,9 +63,7 @@ export function CarIntakeForm({ onReady }: CarIntakeFormProps) {
       const baseImageUrl = await uploadCarImage(file);
 
       setStatus("generating");
-      const options = await fetchCustomizationOptions(name, [
-        ...CATEGORY_ORDER,
-      ]);
+      const options = await fetchCustomizationOptions(name);
       const data = buildInitialDataFromOptions(options, baseImageUrl);
 
       onReady(data, name, options.planMode, options.credits, baseImageUrl);

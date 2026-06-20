@@ -1,12 +1,12 @@
 "use client";
 
-import { CATEGORY_META } from "../core/customization-options/catalog";
-import {
+import { getCategoryMeta } from "../core/customization-options/catalog";
+import type {
   CustomizationCategory,
-  type CustomizationCategoryItem,
-  type CustomizationData,
+  CustomizationCategoryItem,
+  CustomizationData,
 } from "../core/customization-options/types/CustomizationData";
-import { CATEGORY_ICONS, CheckIcon, WheelGraphic } from "./icons";
+import { CheckIcon, getCategoryIcon, WheelGraphic } from "./icons";
 
 type OptionsPanelProps = {
   data: CustomizationData;
@@ -19,7 +19,7 @@ export function OptionsPanel({
   activeCategory,
   onSelectOption,
 }: OptionsPanelProps) {
-  const meta = CATEGORY_META[activeCategory];
+  const meta = getCategoryMeta(activeCategory);
   const content = data.categories[activeCategory];
   const selectedSlug = data.selections[activeCategory];
 
@@ -139,11 +139,11 @@ function OptionFallback({
   category: CustomizationCategory;
   item: CustomizationCategoryItem;
 }) {
-  if (category === CustomizationCategory.WHEELS) {
+  if (category === "wheels") {
     return <WheelGraphic color={item.swatch} size={72} />;
   }
 
-  if (category === CustomizationCategory.PAINT) {
+  if (category === "paint") {
     return (
       <span
         className="h-16 w-16 rounded-full border border-white/20 shadow-inner"
@@ -154,7 +154,7 @@ function OptionFallback({
     );
   }
 
-  const Icon = CATEGORY_ICONS[category];
+  const Icon = getCategoryIcon(category);
   return (
     <span
       className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15"

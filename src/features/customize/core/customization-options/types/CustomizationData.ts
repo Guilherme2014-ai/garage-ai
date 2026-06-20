@@ -1,11 +1,9 @@
-export enum CustomizationCategory {
-  WHEELS = "wheels",
-  PAINT = "paint",
-  SUSPENSION = "suspension",
-  BODY_KITS = "body-kits",
-  LIGHTING = "lighting",
-  SPOILERS = "spoilers",
-}
+/**
+ * A customization category, identified by its slug. The set of categories is
+ * generated per-vehicle by the LLM (not a fixed list), so this is an open string
+ * type rather than an enum. Display metadata is derived in `catalog.ts`.
+ */
+export type CustomizationCategory = string;
 
 /**
  * Lifecycle of any AI-generated artifact (a category catalog or a vehicle

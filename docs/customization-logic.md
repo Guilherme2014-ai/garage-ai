@@ -27,8 +27,11 @@ Home (/) "Upload & Start Customizing"
 `CarIntakeForm` until the initial data is ready, then swaps in
 `CustomizeWorkspace`.
 
-The categories requested from the LLM are exactly `CATEGORY_ORDER` (the six
-`CustomizationCategory` values), so the whole UI stays driven by that enum.
+The categories are **chosen by the LLM per-vehicle** (the backend decides how
+many via the plan's `maxCategories`). `CustomizationCategory` is therefore an open
+`string` slug, not a fixed enum: the UI renders whatever categories the response
+contains, in order, deriving labels/icons from the slug (`getCategoryMeta` /
+`getCategoryIcon`, with a curated map for common slugs and a generic fallback).
 
 ## Main Concepts
 
@@ -246,9 +249,10 @@ User action -> component callback -> useCustomization()
   across categories and history navigation.
 - **The coordinator owns the source of truth.** React only mirrors it, keeping
   the domain logic testable and framework-independent.
-- **Option lookups are data-driven.** `findOptionInData()` reads the live
-  session items; the static `OPTION_CATALOG` is no longer the source for the
-  active build.
+- **Categories and options are fully data-driven.** Both come from the LLM
+  response: `getActiveCategories(data)` lists the categories the model returned
+  (in order), and `findOptionInData()` reads the live session items. There is no
+  static category/option catalog on the client anymore.
 
 ## Current Limitations
 

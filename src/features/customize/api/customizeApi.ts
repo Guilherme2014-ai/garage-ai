@@ -70,14 +70,15 @@ export async function uploadCarImage(file: File): Promise<string> {
   return data.url;
 }
 
-/** Requests vehicle-aware customization options for the given categories. */
+/**
+ * Requests vehicle-aware customization options. The backend (LLM) decides the
+ * categories per-vehicle, so the client only sends the car.
+ */
 export async function fetchCustomizationOptions(
   car: string,
-  categories: string[],
 ): Promise<ApiCustomizationOptionsResult> {
   return postJson<ApiCustomizationOptionsResult>("/api/customize/options", {
     car,
-    categories,
   });
 }
 

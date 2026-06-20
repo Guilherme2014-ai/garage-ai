@@ -564,7 +564,9 @@ export class CustomizationDataCoordinator {
       this.previewImageCache.set(key, value);
     }
     for (const [key, value] of Object.entries(snapshot.categoryPreviewBase)) {
-      this.categoryPreviewBase.set(key as CustomizationCategory, value);
+      if (value !== undefined) {
+        this.categoryPreviewBase.set(key, value);
+      }
     }
     for (const category of snapshot.paidCategories) {
       this.paidCategories.add(category);

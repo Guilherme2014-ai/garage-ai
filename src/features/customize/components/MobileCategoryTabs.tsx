@@ -1,15 +1,15 @@
 "use client";
 
 import {
-  CATEGORY_META,
   getActiveCategories,
+  getCategoryMeta,
 } from "../core/customization-options/catalog";
 import type {
   CustomizationCategory,
   CustomizationData,
 } from "../core/customization-options/types/CustomizationData";
 import { findOptionInData } from "../core/customization-options/utils/findOptionInData";
-import { CATEGORY_ICONS } from "./icons";
+import { getCategoryIcon } from "./icons";
 
 type MobileCategoryTabsProps = {
   data: CustomizationData;
@@ -29,8 +29,8 @@ export function MobileCategoryTabs({
   return (
     <div className="slim-scrollbar flex gap-2 overflow-x-auto border-white/5 border-b px-4 py-3 lg:hidden">
       {getActiveCategories(data).map((category) => {
-        const meta = CATEGORY_META[category];
-        const Icon = CATEGORY_ICONS[category];
+        const meta = getCategoryMeta(category);
+        const Icon = getCategoryIcon(category);
         const isActive = category === activeCategory;
         const selected = findOptionInData(
           data,

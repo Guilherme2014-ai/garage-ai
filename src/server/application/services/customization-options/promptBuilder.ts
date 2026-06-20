@@ -1,5 +1,5 @@
+import type { PlanMode } from "@/server/domain/plan/plan-mode";
 import { getPlanLimits } from "@/server/domain/plan/plan-mode";
-import type { GenerateCustomizationOptionsInput } from "./types";
 
 /**
  * System prompt: establishes the model as a domain expert and pins the output
@@ -34,32 +34,43 @@ export function buildSystemPrompt(): string {
   ].join("\n");
 }
 
+export interface UserPromptInput {
+  car: string;
+  planMode: PlanMode;
+}
+
 /**
- * User prompt: injects the concrete vehicle + requested categories and the
- * exact JSON schema the model must return.
+ * User prompt: injects the concrete vehicle and the exact JSON schema the model
+ * must return. The model chooses the customization categories itself (vehicle-
+ * aware), constrained only by how many the plan allows; the backend does not
+ * dictate the category set.
  */
-export function buildUserPrompt({
-  car,
-  categories,
-  planMode,
-}: GenerateCustomizationOptionsInput): string {
-  const categoryList = categories.map((c) => `"${c}"`).join(", ");
-  const optionsPerCategory = getPlanLimits(planMode).optionsPerCategory;
+export function buildUserPrompt({ car, planMode }: UserPromptInput): string {
+  const { categoriesCount: maxCategories, optionsPerCategory } =
+    getPlanLimits(planMode);
 
   return [
     `Vehicle: ${car}`,
-    `Categories: [${categoryList}]`,
     "",
-    "For the vehicle above, generate aftermarket customization options for each",
-    "of the requested categories.",
+    "For the vehicle above, FIRST decide which aftermarket customization",
+    "categories are the most relevant for THIS specific car, then generate",
+    "options within each. Choose the categories yourself based on the vehicle's",
+    "style, era, and enthusiast scene — do NOT rely on a fixed or generic list.",
     "",
     "This is an image customization app: every option will be applied to a car",
-    "photo. Only suggest modifications whose result is visible from typical",
-    "exterior angles. Do not list parts that stay hidden under the body or",
-    "inside the car.",
+    "photo. Only choose categories and modifications whose result is visible from",
+    "typical exterior angles. Do not include parts that stay hidden under the",
+    "body or inside the car.",
     "",
     "Requirements:",
-    `- Generate options for EXACTLY these ${categories.length} categories.`,
+    `- Choose EXACTLY ${maxCategories} categories, ordered most relevant first.`,
+    "- Each category key must be a short, lowercase slug: 1-2 words, words joined",
+    '  by single hyphens, no spaces or punctuation (e.g. "wheels", "paint",',
+    '  "body-kits", "lighting", "spoilers", "ride-height").',
+    "- Categories must be distinct — each a visibly different kind of exterior",
+    "  modification, with no overlap or duplicates.",
+    "- If you include a stance/ride-height category, recommend looks only (stock",
+    "  height, mild drop, aggressive slam, lifted) — not invisible hardware.",
     `- Provide EXACTLY ${optionsPerCategory} options per category.`,
     "- Rank options from most relevant (rank 1) to least relevant, and order",
     "  the array to match the ranking.",
@@ -67,8 +78,6 @@ export function buildUserPrompt({
     "  mechanical-only upgrades (e.g. coilovers, lowering springs, dampers,",
     "  bushings, brake kits hidden behind wheels) unless you frame them by their",
     "  visible outcome.",
-    '- For "suspension", recommend stance/ride-height looks only — e.g. stock',
-    "  height, mild drop, aggressive slam, or lifted — not invisible hardware.",
     "- Recommendations must fit this exact vehicle's style, era, culture, and",
     "  enthusiast community.",
     "- Prefer real-world brands and specific products when the part itself is",
@@ -95,7 +104,7 @@ export function buildUserPrompt({
     '  "car": string,',
     '  "vehicleProfile": { "style": string, "era": string, "summary": string },',
     '  "categories": {',
-    '    "<category>": [',
+    '    "<category-slug>": [',
     "      {",
     '        "rank": number,',
     '        "name": string,',
@@ -110,7 +119,7 @@ export function buildUserPrompt({
     "  }",
     "}",
     "",
-    'The keys of the "categories" object must be exactly the requested',
-    "categories. Output valid JSON only.",
+    `The "categories" object must have EXACTLY ${maxCategories} keys — the category`,
+    "slugs you selected for this vehicle. Output valid JSON only.",
   ].join("\n");
 }
