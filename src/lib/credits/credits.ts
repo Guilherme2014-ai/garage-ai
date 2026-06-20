@@ -11,8 +11,8 @@ export const STARTING_CREDITS = 15;
 /** Credits charged the first time a category's previews are generated. */
 export const CREDITS_PER_CATEGORY = 5;
 
-/** Identifier for a purchasable credit pack. (`test1` is a temporary test pack.) */
-export type CreditPackId = "p60" | "p120" | "p240" | "test1";
+/** Identifier for a purchasable credit pack. */
+export type CreditPackId = "p60" | "p120" | "p240";
 
 export interface CreditPack {
   id: CreditPackId;
@@ -28,16 +28,6 @@ export interface CreditPack {
 
 /** The packs offered at checkout, cheapest first. */
 export const CREDIT_PACKS: CreditPack[] = [
-  // TEST PACK — R$1 for verifying the purchase flow. Remove this entry, the
-  // STRIPE_PRICE_TEST1 env var, the `test1` id above, and its mapping in
-  // `src/server/infrastructure/stripe/stripe.ts` when done testing.
-  {
-    id: "test1",
-    credits: 15,
-    priceUsd: 1,
-    label: "Test pack",
-    priceLabel: "R$1",
-  },
   { id: "p60", credits: 60, priceUsd: 5, label: "60 credits" },
   { id: "p120", credits: 120, priceUsd: 10, label: "120 credits" },
   { id: "p240", credits: 240, priceUsd: 20, label: "240 credits" },

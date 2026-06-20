@@ -530,7 +530,54 @@ export class CustomizationDataCoordinator {
       }
     }
 
-    return { ...snapshot, categories };
+    return this.reconcileItemPreviews({ ...snapshot, categories });
+  }
+
+  /**
+   * Re-applies preview images already generated this session onto a restored
+   * snapshot's option items. A snapshot can be cached while some of a category's
+   * previews are still in flight (e.g. selecting an option before its siblings
+   * finish generating); the snapshot then freezes those items as `generating`.
+   * Without this reconciliation, re-selecting that combination would resurface
+   * stale spinners for options whose images are in fact ready in
+   * {@link previewImageCache} — and, unlike history navigation, the cache-hit
+   * path never re-enters the category to regenerate them.
+   */
+  private reconcileItemPreviews(data: CustomizationData): CustomizationData {
+    const categories = { ...data.categories };
+    let changed = false;
+
+    for (const key of Object.keys(categories) as CustomizationCategory[]) {
+      const baseSelections = this.withoutCategory(data.selections, key);
+      let itemsChanged = false;
+
+      const items = categories[key].items.map((item) => {
+        if (item.preview?.status === "generated" && item.preview.imageUrl) {
+          return item;
+        }
+        const combinationString = buildCombinationString({
+          ...baseSelections,
+          [key]: item.slug,
+        });
+        const cachedImage = this.previewImageCache.get(combinationString);
+        if (!cachedImage) {
+          return item;
+        }
+        itemsChanged = true;
+        const preview: ItemPreview = {
+          status: "generated",
+          imageUrl: cachedImage,
+        };
+        return { ...item, preview };
+      });
+
+      if (itemsChanged) {
+        categories[key] = { ...categories[key], items };
+        changed = true;
+      }
+    }
+
+    return changed ? { ...data, categories } : data;
   }
 
   // --- serialization ------------------------------------------------------

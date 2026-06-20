@@ -32,8 +32,6 @@ const PRICE_ENV_BY_PACK: Record<CreditPackId, string> = {
   p60: "STRIPE_PRICE_P60",
   p120: "STRIPE_PRICE_P120",
   p240: "STRIPE_PRICE_P240",
-  // TEST PACK — remove with the `test1` pack when done testing.
-  test1: "STRIPE_PRICE_TEST1",
 };
 
 /**
