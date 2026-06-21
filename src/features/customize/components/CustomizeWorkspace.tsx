@@ -216,7 +216,9 @@ export function CustomizeWorkspace({
         activeCategory={activeCategory}
         isSaved={isSaved}
         isSaving={isSaving}
+        isFree={isFree}
         onSelectCategory={requestSelectCategory}
+        onBuyCredits={() => setUpgradeOpen(true)}
         onSave={save}
         onReset={reset}
       />

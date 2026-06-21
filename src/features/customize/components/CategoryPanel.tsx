@@ -17,6 +17,7 @@ import {
   getCategoryIcon,
   ResetIcon,
   SaveIcon,
+  SparkleIcon,
 } from "./icons";
 
 type CategoryPanelProps = {
@@ -24,7 +25,9 @@ type CategoryPanelProps = {
   activeCategory: CustomizationCategory;
   isSaved: boolean;
   isSaving: boolean;
+  isFree: boolean;
   onSelectCategory: (category: CustomizationCategory) => void;
+  onBuyCredits: () => void;
   onSave: () => void;
   onReset: () => void;
 };
@@ -34,7 +37,9 @@ export function CategoryPanel({
   activeCategory,
   isSaved,
   isSaving,
+  isFree,
   onSelectCategory,
+  onBuyCredits,
   onSave,
   onReset,
 }: CategoryPanelProps) {
@@ -106,6 +111,28 @@ export function CategoryPanel({
           );
         })}
       </div>
+
+      {isFree && (
+        <div className="px-4 pb-2">
+          <button
+            type="button"
+            onClick={onBuyCredits}
+            className="group flex w-full flex-col gap-1 rounded-xl border border-violet-500/30 bg-gradient-to-br from-violet-600/20 to-blue-500/10 p-3.5 text-left transition hover:border-violet-500/50 hover:from-violet-600/30 hover:to-blue-500/20"
+          >
+            <span className="flex items-center gap-2">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-blue-500 text-white">
+                <SparkleIcon className="h-3.5 w-3.5" />
+              </span>
+              <span className="font-semibold text-sm text-white">
+                Add more credits
+              </span>
+            </span>
+            <span className="text-[11px] text-zinc-400">
+              Unlock way more equipments, previews, and keep building!
+            </span>
+          </button>
+        </div>
+      )}
 
       <div className="space-y-2 border-white/5 border-t p-4">
         <button
