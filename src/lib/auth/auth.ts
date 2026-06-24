@@ -1,10 +1,15 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import type { SignInInput } from "@/server/application/services/auth.service";
 import { authService } from "@/server/application/services/auth.service";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    }),
     Credentials({
       name: "Credentials",
       credentials: {
@@ -25,6 +30,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      // Credentials sign-in is already resolved in `authorize`.
+      if (account?.provider !== "google") return true;
+
+      if (!user.email) return false;
+
+      // Upsert the application user and carry our own id forward so the JWT
+      // (and everything downstream) keys off the database user, not Google's.
+      const appUser = await authService.findOrCreateOAuthUser({
+        provider: "google",
+        providerId: account.providerAccountId,
+        email: user.email,
+        name: user.name ?? user.email,
+        image: user.image ?? null,
+      });
+      user.id = appUser.id;
+      return true;
+    },
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id ?? "";

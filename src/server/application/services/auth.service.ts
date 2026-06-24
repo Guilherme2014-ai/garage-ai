@@ -22,6 +22,14 @@ export interface UpdateProfileInput {
   name?: string;
 }
 
+export interface OAuthSignInInput {
+  provider: string;
+  providerId: string;
+  email: string;
+  name: string;
+  image: string | null;
+}
+
 function toAuthResult(entity: UserEntity) {
   return {
     id: entity.id,
@@ -75,6 +83,43 @@ export const authService = {
     if (!isValidPassword) {
       throw new ValidationError("Invalid credentials");
     }
+
+    return toAuthResult(user);
+  },
+
+  /**
+   * Resolves the application user behind an OAuth sign-in, creating one on the
+   * first login. Matches first on `(provider, providerId)`, then falls back to
+   * the verified email so an existing credentials account is linked rather than
+   * duplicated. OAuth users have no password (`null`).
+   */
+  async findOrCreateOAuthUser(data: OAuthSignInInput) {
+    const byProvider = await userRepository.findByProviderId(
+      data.provider,
+      data.providerId,
+    );
+    if (byProvider) {
+      return toAuthResult(byProvider);
+    }
+
+    const byEmail = await userRepository.findByEmail(data.email);
+    if (byEmail) {
+      const linked = await userRepository.update(byEmail.id, {
+        provider: byEmail.provider ?? data.provider,
+        providerId: byEmail.providerId ?? data.providerId,
+        image: byEmail.image ?? data.image,
+      });
+      return toAuthResult(linked ?? byEmail);
+    }
+
+    const user = await userRepository.create({
+      email: data.email,
+      name: data.name,
+      password: null,
+      image: data.image,
+      provider: data.provider,
+      providerId: data.providerId,
+    });
 
     return toAuthResult(user);
   },
