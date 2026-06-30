@@ -9,6 +9,38 @@ export interface CategoryDefinition {
 }
 
 /**
+ * Categories every generated configuration must include, in display order.
+ * Enforced in the LLM prompt (see `promptBuilder.ts`) and guaranteed in the
+ * response post-processing (see `customization-options.service.ts`), so both the
+ * initial build and any regeneration always surface these.
+ */
+export const MANDATORY_CATEGORIES = ["wheels", "paint", "hood"] as const;
+
+/**
+ * Common slug synonyms the model may return, mapped to the canonical slug we
+ * curate icons/labels for. Keeps the mandatory-category guarantee robust when
+ * the model phrases a category differently (e.g. "rims" -> "wheels").
+ */
+export const CATEGORY_SYNONYMS: Record<string, string> = {
+  rims: "wheels",
+  wheel: "wheels",
+  rim: "wheels",
+  bonnet: "hood",
+  hoods: "hood",
+  "paint-wraps": "paint",
+  "paint-and-wraps": "paint",
+  wrap: "paint",
+  wraps: "paint",
+  "vinyl-wrap": "paint",
+  livery: "paint",
+};
+
+/** Resolves a slug to its canonical form, collapsing known synonyms. */
+export function canonicalCategorySlug(slug: string): string {
+  return CATEGORY_SYNONYMS[slug] ?? slug;
+}
+
+/**
  * Default customization categories for MOCK/testing mode only.
  *
  * Real generation lets the LLM choose categories per-vehicle (see
@@ -25,6 +57,10 @@ export const CUSTOMIZATION_CATEGORIES: CategoryDefinition[] = [
   {
     slug: "paint",
     hint: "paint colors, vinyl wraps, and finishes (gloss, matte, satin)",
+  },
+  {
+    slug: "hood",
+    hint: "hood/bonnet styling — carbon-fiber, vented, scooped, or contrasting finishes",
   },
   {
     slug: "suspension",

@@ -1,6 +1,11 @@
+import type Stripe from "stripe";
 import { apiError, apiServerError, apiSuccess } from "@/lib/api/api-response";
 import { requireAuthAPI } from "@/lib/auth/auth-utils";
-import { getCreditPack, isCreditPackId } from "@/server/domain/credits/credits";
+import {
+  CREDIT_BUMP,
+  getCreditPack,
+  isCreditPackId,
+} from "@/server/domain/credits/credits";
 import { AppError } from "@/server/domain/errors";
 import {
   getStripePriceId,
@@ -10,11 +15,12 @@ import {
 /**
  * POST /api/stripe/checkout
  *
- * Body: `{ pack: CreditPackId }`. Creates a Stripe Checkout Session for the
- * chosen credit pack and returns its URL for the client to redirect to. The
- * credits and price are resolved server-side from the pack id — the client
- * never sends an amount — and the buyer + credits are stamped into the session
- * metadata so the webhook can grant them on completion.
+ * Body: `{ pack: CreditPackId, bump?: boolean, buildId?: string }`. Creates a
+ * Stripe Checkout Session for the chosen credit pack — plus the discounted
+ * order-bump credits when `bump` is set — and returns its URL for the client to
+ * redirect to. The credits and price are resolved server-side (the client never
+ * sends an amount); the buyer and the total credits to grant are stamped into
+ * the session metadata so the webhook can grant them on completion.
  */
 export async function POST(request: Request) {
   const { session, error } = await requireAuthAPI();
@@ -32,8 +38,13 @@ export async function POST(request: Request) {
     return apiError("Expected a JSON request body", 400);
   }
 
-  const { pack: packId, buildId } = (body ?? {}) as {
+  const {
+    pack: packId,
+    bump,
+    buildId,
+  } = (body ?? {}) as {
     pack?: unknown;
+    bump?: unknown;
     buildId?: unknown;
   };
   if (!isCreditPackId(packId)) {
@@ -45,6 +56,12 @@ export async function POST(request: Request) {
     return apiError("Unknown credit pack", 400);
   }
 
+  const withBump = bump === true;
+  // Total credits to grant — pack plus the optional order bump. Computed
+  // server-side and stamped into metadata so the webhook never trusts the
+  // client for an amount.
+  const totalCredits = pack.credits + (withBump ? CREDIT_BUMP.credits : 0);
+
   try {
     const origin =
       process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
@@ -55,13 +72,38 @@ export async function POST(request: Request) {
         ? `&build=${encodeURIComponent(buildId)}`
         : "";
 
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      { price: getStripePriceId(pack.id), quantity: 1 },
+    ];
+
+    // The bump is an ad-hoc add-on, so price it inline rather than maintaining a
+    // separate Stripe price id.
+    if (withBump) {
+      lineItems.push({
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: CREDIT_BUMP.priceUsd * 100,
+          product_data: {
+            name: `${CREDIT_BUMP.credits} bonus credits`,
+            description: "Discounted add-on credits",
+          },
+        },
+      });
+    }
+
     const checkout = await stripe.checkout.sessions.create({
       mode: "payment",
-      line_items: [{ price: getStripePriceId(pack.id), quantity: 1 }],
+      line_items: lineItems,
       success_url: `${origin}/customize?credits=success${buildParam}`,
       cancel_url: `${origin}/customize?credits=cancelled${buildParam}`,
       client_reference_id: userId,
-      metadata: { userId, pack: pack.id, credits: String(pack.credits) },
+      metadata: {
+        userId,
+        pack: pack.id,
+        credits: String(totalCredits),
+        ...(withBump ? { bump: CREDIT_BUMP.id } : {}),
+      },
     });
 
     if (!checkout.url) {

@@ -350,6 +350,26 @@ export function LightIcon({ className }: IconProps) {
   );
 }
 
+export function HoodIcon({ className }: IconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 16c1.5-5 4.5-8 9-8s7.5 3 9 8" />
+      <path d="M2 16h20" />
+      <path d="M12 8V5" />
+      <path d="m9 12 6 0" />
+    </svg>
+  );
+}
+
 export function CarBodyIcon({ className }: IconProps) {
   return (
     <svg
@@ -384,6 +404,7 @@ type IconComponent = (props: IconProps) => React.ReactNode;
 const CATEGORY_ICON_MAP: Record<string, IconComponent> = {
   wheels: WheelIcon,
   paint: PaletteIcon,
+  hood: HoodIcon,
   suspension: SuspensionIcon,
   "ride-height": SuspensionIcon,
   "body-kits": CarIcon,

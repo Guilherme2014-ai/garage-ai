@@ -5,11 +5,19 @@
  * `src/features/customize/core/plan/planMode.ts`).
  */
 export {
+  bumpReferencePriceUsd,
+  bumpSavingsPercent,
+  CREDIT_BUMP,
   CREDIT_PACKS,
   CREDITS_PER_CATEGORY,
+  type CreditBump,
   type CreditPack,
   type CreditPackId,
+  creditsToModifications,
   getCreditPack,
   isCreditPackId,
+  packReferencePriceUsd,
+  packSavingsPercent,
+  pricePerCredit,
   STARTING_CREDITS,
 } from "@/lib/credits/credits";

@@ -3,7 +3,6 @@
  * of {@link import("./customizeApi")}.
  */
 
-import type { CreditPackId } from "../core/credits/credits";
 import type { PlanMode } from "../core/plan/planMode";
 
 interface ApiEnvelope<T> {
@@ -53,22 +52,4 @@ export async function chargeCategory(): Promise<ChargeResult> {
     return { ok: true, credits: data.credits };
   }
   return { ok: false, insufficient: response.status === 402 };
-}
-
-/**
- * Starts checkout for a pack and returns the Stripe-hosted URL. The optional
- * `buildId` is round-tripped into the success/cancel redirect so the user lands
- * back on the same build session after paying.
- */
-export async function startCreditCheckout(
-  pack: CreditPackId,
-  buildId?: string,
-): Promise<string> {
-  const response = await fetch("/api/stripe/checkout", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pack, buildId }),
-  });
-  const data = await unwrap<{ url: string }>(response);
-  return data.url;
 }

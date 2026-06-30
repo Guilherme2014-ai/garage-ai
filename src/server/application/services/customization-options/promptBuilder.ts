@@ -1,5 +1,6 @@
 import type { PlanMode } from "@/server/domain/plan/plan-mode";
 import { getPlanLimits } from "@/server/domain/plan/plan-mode";
+import { MANDATORY_CATEGORIES } from "./categories";
 
 /**
  * System prompt: establishes the model as a domain expert and pins the output
@@ -49,13 +50,18 @@ export function buildUserPrompt({ car, planMode }: UserPromptInput): string {
   const { categoriesCount: maxCategories, optionsPerCategory } =
     getPlanLimits(planMode);
 
+  const mandatory = MANDATORY_CATEGORIES;
+  const mandatoryList = mandatory.map((slug) => `"${slug}"`).join(", ");
+  const remaining = Math.max(maxCategories - mandatory.length, 0);
+
   return [
     `Vehicle: ${car}`,
     "",
-    "For the vehicle above, FIRST decide which aftermarket customization",
-    "categories are the most relevant for THIS specific car, then generate",
-    "options within each. Choose the categories yourself based on the vehicle's",
-    "style, era, and enthusiast scene — do NOT rely on a fixed or generic list.",
+    "For the vehicle above, decide which aftermarket customization categories",
+    "are the most relevant for THIS specific car, then generate options within",
+    "each. Beyond the required categories below, choose the rest yourself based",
+    "on the vehicle's style, era, and enthusiast scene — do NOT rely on a fixed",
+    "or generic list for those.",
     "",
     "This is an image customization app: every option will be applied to a car",
     "photo. Only choose categories and modifications whose result is visible from",
@@ -63,7 +69,13 @@ export function buildUserPrompt({ car, planMode }: UserPromptInput): string {
     "body or inside the car.",
     "",
     "Requirements:",
-    `- Choose EXACTLY ${maxCategories} categories, ordered most relevant first.`,
+    `- ALWAYS include these required categories FIRST, in this exact order using`,
+    `  these exact slugs: ${mandatoryList}. "wheels" = aftermarket wheels/rims,`,
+    `  "paint" = paint colors/wraps/finishes, "hood" = the hood/bonnet (e.g.`,
+    "  carbon-fiber, vented, scooped, or contrasting-finish hoods).",
+    remaining > 0
+      ? `- Then choose ${remaining} MORE categories most relevant to this car, for a total of EXACTLY ${maxCategories}, ordered most relevant first.`
+      : `- Return EXACTLY these ${maxCategories} required categories and no others.`,
     "- Each category key must be a short, lowercase slug: 1-2 words, words joined",
     '  by single hyphens, no spaces or punctuation (e.g. "wheels", "paint",',
     '  "body-kits", "lighting", "spoilers", "ride-height").',

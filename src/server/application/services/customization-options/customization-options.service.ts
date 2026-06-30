@@ -7,7 +7,11 @@ import {
   type PlanMode,
 } from "@/server/domain/plan/plan-mode";
 import { generateText } from "@/server/infrastructure/llm";
-import { getCategoriesForPlan } from "./categories";
+import {
+  canonicalCategorySlug,
+  getCategoriesForPlan,
+  MANDATORY_CATEGORIES,
+} from "./categories";
 import { generateMockOptions } from "./mockOptions";
 import { buildSystemPrompt, buildUserPrompt } from "./promptBuilder";
 import type {
@@ -163,7 +167,7 @@ function buildResult(
   for (const [rawKey, list] of Object.entries(rawCategories)) {
     if (Object.keys(categories).length >= maxCategories) break;
 
-    const slug = slugifyCategory(rawKey);
+    const slug = canonicalCategorySlug(slugifyCategory(rawKey));
     if (!slug || categories[slug] || !Array.isArray(list)) {
       continue;
     }
@@ -191,9 +195,32 @@ function buildResult(
     car:
       typeof root.car === "string" && root.car.trim() ? root.car : context.car,
     vehicleProfile: coerceVehicleProfile(root.vehicleProfile),
-    categories,
+    categories: orderMandatoryFirst(categories),
     planMode: context.planMode,
   };
+}
+
+/**
+ * Reorders categories so the always-on ones ({@link MANDATORY_CATEGORIES}) lead,
+ * in their canonical order, followed by the rest as the model ranked them. The
+ * prompt already requires these categories; this keeps them up front even if the
+ * model returns them out of order.
+ */
+function orderMandatoryFirst(
+  categories: Record<string, CustomizationOption[]>,
+): Record<string, CustomizationOption[]> {
+  const ordered: Record<string, CustomizationOption[]> = {};
+  for (const slug of MANDATORY_CATEGORIES) {
+    if (categories[slug]) {
+      ordered[slug] = categories[slug];
+    }
+  }
+  for (const [slug, options] of Object.entries(categories)) {
+    if (!ordered[slug]) {
+      ordered[slug] = options;
+    }
+  }
+  return ordered;
 }
 
 export const customizationOptionsService = {

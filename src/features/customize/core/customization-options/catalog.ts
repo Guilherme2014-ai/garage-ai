@@ -18,6 +18,7 @@ export type CategoryMeta = {
 const CURATED_META: Record<string, { label: string; tagline: string }> = {
   wheels: { label: "Wheels", tagline: "Choose your perfect stance" },
   paint: { label: "Paint & Wraps", tagline: "Set the tone of your build" },
+  hood: { label: "Hood", tagline: "Add aggression up front" },
   suspension: { label: "Suspension", tagline: "Dial in the ride height" },
   "ride-height": { label: "Ride Height", tagline: "Dial in the stance" },
   "body-kits": { label: "Body Kits", tagline: "Reshape the silhouette" },

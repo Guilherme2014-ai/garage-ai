@@ -79,23 +79,25 @@ export async function POST(request: Request) {
 }
 
 /**
- * Grants the purchased pack's credits for a paid checkout session, exactly once
- * per Stripe event. Missing/invalid metadata is logged and acked (not
- * retryable); a duplicate event is skipped without re-crediting.
+ * Grants the purchased credits for a paid checkout session, exactly once per
+ * Stripe event. The total (pack + any order bump) is read from the
+ * server-stamped `credits` metadata, falling back to the pack's credits for
+ * older sessions. Missing/invalid metadata is logged and acked (not retryable);
+ * a duplicate event is skipped without re-crediting.
  */
 async function grantForSession(
   event: Stripe.Event,
   checkout: Stripe.Checkout.Session,
 ): Promise<void> {
   const userId = checkout.metadata?.userId;
-  const packId = checkout.metadata?.pack;
-  const pack = packId ? getCreditPack(packId) : undefined;
+  const credits = resolveCreditsToGrant(checkout);
 
-  if (!userId || !pack) {
-    console.error("Stripe checkout session missing userId/pack metadata", {
+  if (!userId || credits === null) {
+    console.error("Stripe checkout session missing userId/credits metadata", {
       eventId: event.id,
       userId,
-      packId,
+      pack: checkout.metadata?.pack,
+      credits: checkout.metadata?.credits,
     });
     return;
   }
@@ -104,9 +106,30 @@ async function grantForSession(
     event.id,
     event.type,
     userId,
-    pack,
+    credits,
   );
   if (result === "duplicate") {
     console.info(`Stripe event ${event.id} already processed; skipping grant`);
   }
+}
+
+/**
+ * Resolves how many credits a paid session should grant. Prefers the
+ * server-stamped `credits` total (pack + order bump); falls back to the pack's
+ * own credits when only `pack` is present. Returns `null` when neither yields a
+ * positive integer.
+ */
+function resolveCreditsToGrant(
+  checkout: Stripe.Checkout.Session,
+): number | null {
+  const raw = checkout.metadata?.credits;
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  if (Number.isInteger(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  const pack = checkout.metadata?.pack
+    ? getCreditPack(checkout.metadata.pack)
+    : undefined;
+  return pack ? pack.credits : null;
 }

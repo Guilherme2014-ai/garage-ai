@@ -1,12 +1,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { HeaderAuth } from "@/features/auth/components/header-auth";
+import { BuyCreditsButton, PricingSection } from "@/features/credits";
 import { BeforeAfterShowcase } from "@/features/landing/components/before-after-slider";
 import { Gallery } from "@/features/landing/components/gallery";
 
 const NAV_LINKS = [
   { label: "Features", href: "#features" },
   { label: "Gallery", href: "#gallery" },
+  { label: "Pricing", href: "#pricing" },
   { label: "About", href: "#about" },
 ];
 
@@ -75,6 +77,7 @@ export default function Home() {
         <HowItWorks />
         <Features />
         <GallerySection />
+        <PricingSection />
         <TrustedBy />
       </main>
 
@@ -129,7 +132,8 @@ function Header() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <BuyCreditsButton variant="nav" className="hidden sm:inline-flex" />
           <HeaderAuth />
         </div>
       </div>
@@ -176,6 +180,22 @@ function Hero() {
             Upload &amp; Start Customizing
             <ArrowRightIcon className="h-4 w-4 transition group-hover:translate-x-0.5" />
           </Link>
+        </div>
+
+        <div className="mt-4 flex max-w-md items-center justify-center gap-3 text-sm">
+          <span className="h-px flex-1 bg-white/10" />
+          <span className="shrink-0 text-xs text-zinc-600">or</span>
+          <span className="h-px flex-1 bg-white/10" />
+        </div>
+        <div className="mt-4 max-w-md">
+          <BuyCreditsButton
+            variant="secondary"
+            label="Buy Credits"
+            className="w-full"
+          />
+          <p className="mt-2 text-center text-xs text-zinc-600">
+            Stock up on credits — bigger packs save up to 33%.
+          </p>
         </div>
 
         <div className="mt-6 flex items-center gap-3">

@@ -1,7 +1,4 @@
-import {
-  CREDITS_PER_CATEGORY,
-  type CreditPack,
-} from "@/server/domain/credits/credits";
+import { CREDITS_PER_CATEGORY } from "@/server/domain/credits/credits";
 import { InsufficientCreditsError } from "@/server/domain/errors";
 import { userRepository } from "@/server/repositories";
 
@@ -39,22 +36,23 @@ export const creditsService = {
 
   /**
    * Applies a completed purchase exactly once for the originating Stripe event:
-   * adds the pack's credits and upgrades the buyer to `top-up`. Returns
-   * `"duplicate"` when the event was already processed (a redelivery/retry) so
-   * the caller can skip without double-crediting, or `"granted"` otherwise.
-   * Safe to no-op if the user no longer exists.
+   * adds `credits` (the pack plus any order-bump total resolved at checkout) and
+   * upgrades the buyer to `top-up`. Returns `"duplicate"` when the event was
+   * already processed (a redelivery/retry) so the caller can skip without
+   * double-crediting, or `"granted"` otherwise. Safe to no-op if the user no
+   * longer exists.
    */
   async grantPurchase(
     eventId: string,
     eventType: string,
     userId: string,
-    pack: CreditPack,
+    credits: number,
   ): Promise<"granted" | "duplicate"> {
     return userRepository.grantPurchaseOnce({
       eventId,
       eventType,
       userId,
-      credits: pack.credits,
+      credits,
       planMode: "top-up",
     });
   },
