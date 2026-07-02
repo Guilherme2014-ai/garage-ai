@@ -7,6 +7,7 @@
 export {
   bumpReferencePriceUsd,
   bumpSavingsPercent,
+  CATEGORY_VALUE_USD,
   CREDIT_BUMP,
   CREDIT_PACKS,
   CREDITS_PER_CATEGORY,
@@ -14,6 +15,7 @@ export {
   type CreditPack,
   type CreditPackId,
   creditsToModifications,
+  formatUsd,
   getCreditPack,
   isCreditPackId,
   packReferencePriceUsd,

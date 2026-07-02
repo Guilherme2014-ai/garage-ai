@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   bumpReferencePriceUsd,
   bumpSavingsPercent,
   CREDIT_BUMP,
   CREDIT_PACKS,
   type CreditPackId,
-  creditsToModifications,
+  formatUsd,
   getCreditPack,
   packReferencePriceUsd,
   packSavingsPercent,
@@ -126,9 +127,9 @@ export function CreditsDialog({
     }
   }
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Buy credits"
@@ -136,105 +137,107 @@ export function CreditsDialog({
       <button
         type="button"
         aria-label="Close"
-        className="absolute inset-0 cursor-default"
+        className="fixed inset-0 cursor-default"
         onClick={onClose}
       />
 
-      <div className="slim-scrollbar relative flex max-h-[92dvh] w-full max-w-md flex-col overflow-y-auto rounded-t-3xl border border-white/10 bg-[#0a0912] sm:rounded-3xl">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10"
-        >
-          <XIcon className="h-4 w-4" />
-        </button>
-
-        <div className="px-6 pt-7 pb-3 text-center">
-          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-500 text-white shadow-lg shadow-violet-900/30">
-            <SparkleIcon className="h-6 w-6" />
-          </span>
-          <h2 className="mt-4 font-bold text-xl tracking-tight">{title}</h2>
-          <p className="mt-1.5 text-sm text-zinc-400">{subtitle}</p>
-        </div>
-
-        <div className="mx-6 mb-1 flex items-center justify-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-amber-300 text-xs">
-          <BoltIcon className="h-3.5 w-3.5" />
-          <span className="font-medium">
-            Limited-time bonus pricing — extra credits on every pack.
-          </span>
-        </div>
-
-        {benefits.length > 0 && (
-          <div className="space-y-2.5 px-6 py-4">
-            {benefits.map((benefit) => (
-              <div key={benefit.title} className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
-                  <CheckIcon className="h-3.5 w-3.5" />
-                </span>
-                <span className="flex min-w-0 flex-col">
-                  <span className="font-medium text-sm">{benefit.title}</span>
-                  <span className="text-xs text-zinc-500">
-                    {benefit.description}
-                  </span>
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="space-y-2.5 px-6 pt-1">
-          {CREDIT_PACKS.map((option) => (
-            <PackCard
-              key={option.id}
-              packId={option.id}
-              selected={option.id === selectedPack}
-              onSelect={() => setSelectedPack(option.id)}
-            />
-          ))}
-        </div>
-
-        <div className="px-6 pt-3">
-          <OrderBumpCard
-            checked={bumpChecked}
-            onToggle={() => setBumpChecked((v) => !v)}
-          />
-        </div>
-
-        <div className="sticky bottom-0 mt-3 space-y-2.5 border-white/5 border-t bg-[#0a0912] px-6 pt-3 pb-6">
-          {error && (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-red-300 text-xs">
-              {error}
-            </p>
-          )}
-
+      <div className="flex min-h-full justify-center p-4">
+        <div className="slim-scrollbar relative my-auto flex w-full max-w-md flex-col rounded-3xl border border-white/10 bg-[#0a0912]">
           <button
             type="button"
-            disabled={pending}
-            onClick={handleCheckout}
-            className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-500 py-3.5 font-semibold text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute top-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10"
           >
-            {pending ? (
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-            ) : (
-              <>
-                Continue — ${totalPrice}
-                <ArrowRightIcon className="h-4 w-4 transition group-hover:translate-x-0.5" />
-              </>
-            )}
+            <XIcon className="h-4 w-4" />
           </button>
 
-          <p className="text-center text-[11px] text-zinc-500">
-            {totalCredits} credits · {creditsToModifications(totalCredits)}{" "}
-            category modifications
-          </p>
-          <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-zinc-600">
-            <LockIcon className="h-3 w-3" />
-            Secure one-time payment via Stripe · Credits never expire
-          </p>
+          <div className="px-6 pt-7 pb-3 text-center">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-500 text-white shadow-lg shadow-violet-900/30">
+              <SparkleIcon className="h-6 w-6" />
+            </span>
+            <h2 className="mt-4 font-bold text-xl tracking-tight">{title}</h2>
+            <p className="mt-1.5 text-sm text-zinc-400">{subtitle}</p>
+          </div>
+
+          <div className="mx-6 mb-1 flex items-center justify-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-amber-300 text-xs">
+            <BoltIcon className="h-3.5 w-3.5" />
+            <span className="font-medium">
+              Limited-time bonus pricing — extra credits on every pack.
+            </span>
+          </div>
+
+          {benefits.length > 0 && (
+            <div className="space-y-2.5 px-6 py-4">
+              {benefits.map((benefit) => (
+                <div key={benefit.title} className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+                    <CheckIcon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="font-medium text-sm">{benefit.title}</span>
+                    <span className="text-xs text-zinc-500">
+                      {benefit.description}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-2.5 px-6 pt-1">
+            {CREDIT_PACKS.map((option) => (
+              <PackCard
+                key={option.id}
+                packId={option.id}
+                selected={option.id === selectedPack}
+                onSelect={() => setSelectedPack(option.id)}
+              />
+            ))}
+          </div>
+
+          <div className="px-6 pt-3">
+            <OrderBumpCard
+              checked={bumpChecked}
+              onToggle={() => setBumpChecked((v) => !v)}
+            />
+          </div>
+
+          <div className="mt-3 space-y-2.5 border-white/5 border-t bg-[#0a0912] px-6 pt-3 pb-6">
+            {error && (
+              <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-red-300 text-xs">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="button"
+              disabled={pending}
+              onClick={handleCheckout}
+              className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-500 py-3.5 font-semibold text-sm text-white shadow-lg shadow-violet-900/30 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {pending ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              ) : (
+                <>
+                  Continue — ${formatUsd(totalPrice)}
+                  <ArrowRightIcon className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                </>
+              )}
+            </button>
+
+            <p className="text-center text-[11px] text-zinc-500">
+              {totalCredits} credits
+            </p>
+            <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-zinc-600">
+              <LockIcon className="h-3 w-3" />
+              Secure one-time payment via Stripe · Credits never expire
+            </p>
+          </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -295,16 +298,15 @@ function PackCard({
             </span>
           )}
         </span>
-        <span className="text-xs text-zinc-500">
-          {creditsToModifications(pack.credits)} category modifications
-        </span>
       </span>
 
       <span className="flex shrink-0 flex-col items-end">
-        <span className="font-bold text-base text-white">${pack.priceUsd}</span>
+        <span className="font-bold text-base text-white">
+          ${formatUsd(pack.priceUsd)}
+        </span>
         {savings > 0 && (
           <span className="text-[11px] text-zinc-500 line-through">
-            ${reference}
+            ${formatUsd(reference)}
           </span>
         )}
       </span>
@@ -349,11 +351,11 @@ function OrderBumpCard({
             Yes! {CREDIT_BUMP.label}
           </span>
           <span className="font-bold text-amber-200 text-sm">
-            +${CREDIT_BUMP.priceUsd}
+            +${formatUsd(CREDIT_BUMP.priceUsd)}
           </span>
           {savings > 0 && (
             <span className="rounded-md bg-amber-400/20 px-1.5 py-0.5 font-semibold text-[10px] text-amber-200">
-              ${reference} value · save {savings}%
+              ${formatUsd(reference)} value · save {savings}%
             </span>
           )}
         </span>

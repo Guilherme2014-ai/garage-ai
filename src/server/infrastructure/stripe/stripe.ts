@@ -29,9 +29,10 @@ if (process.env.NODE_ENV !== "production") {
 
 /** Maps each credit pack to the env var holding its live Stripe price id. */
 const PRICE_ENV_BY_PACK: Record<CreditPackId, string> = {
+  p30: "STRIPE_PRICE_P30",
   p60: "STRIPE_PRICE_P60",
   p120: "STRIPE_PRICE_P120",
-  p240: "STRIPE_PRICE_P240",
+  p300: "STRIPE_PRICE_P300",
 };
 
 /**
@@ -45,6 +46,16 @@ export function getStripePriceId(pack: CreditPackId): string {
     throw new Error(`${envName} is not set. Configure the Stripe price ids.`);
   }
   return priceId;
+}
+
+/**
+ * Resolves the Stripe price id for the order bump, or `null` when it isn't
+ * configured. Unlike the packs — which must map to a price so we never charge a
+ * wrong amount — the bump can fall back to an inline `price_data` line item, so a
+ * missing id degrades gracefully instead of breaking the whole checkout.
+ */
+export function getStripeBumpPriceId(): string | null {
+  return process.env.STRIPE_PRICE_BUMP?.trim() || null;
 }
 
 /** Webhook signing secret used to verify incoming Stripe events. */

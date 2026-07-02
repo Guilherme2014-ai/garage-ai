@@ -7,7 +7,7 @@ import {
   CREDIT_PACKS,
   CREDITS_PER_CATEGORY,
   type CreditPack,
-  creditsToModifications,
+  formatUsd,
   packReferencePriceUsd,
   packSavingsPercent,
 } from "@/lib/credits/credits";
@@ -52,7 +52,7 @@ export function PricingSection() {
         {CREDITS_PER_CATEGORY} credits — bigger packs unlock the best value.
       </p>
 
-      <div className="mt-12 grid items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-12 grid items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {CREDIT_PACKS.map((pack) => (
           <PricingCard key={pack.id} pack={pack} onSelect={openCheckout} />
         ))}
@@ -77,11 +77,9 @@ function PricingCard({
 }) {
   const savings = packSavingsPercent(pack);
   const reference = packReferencePriceUsd(pack);
-  const mods = creditsToModifications(pack.credits);
 
   const perks = [
     `${pack.credits} credits`,
-    `${mods} category modifications`,
     "Unlimited high-res downloads",
     "Credits never expire",
   ];
@@ -110,11 +108,11 @@ function PricingCard({
 
       <div className="mt-3 flex items-end gap-2">
         <span className="font-extrabold text-4xl tracking-tight">
-          ${pack.priceUsd}
+          ${formatUsd(pack.priceUsd)}
         </span>
         {savings > 0 && (
           <span className="mb-1 text-sm text-zinc-500 line-through">
-            ${reference}
+            ${formatUsd(reference)}
           </span>
         )}
       </div>

@@ -8,6 +8,7 @@ import {
 } from "@/server/domain/credits/credits";
 import { AppError } from "@/server/domain/errors";
 import {
+  getStripeBumpPriceId,
   getStripePriceId,
   stripe,
 } from "@/server/infrastructure/stripe/stripe";
@@ -76,20 +77,26 @@ export async function POST(request: Request) {
       { price: getStripePriceId(pack.id), quantity: 1 },
     ];
 
-    // The bump is an ad-hoc add-on, so price it inline rather than maintaining a
-    // separate Stripe price id.
+    // Prefer the dedicated Stripe price for the bump (first-class SKU, tracked in
+    // the dashboard like the packs). Fall back to an inline price when the env
+    // isn't configured so the add-on still works without a price id.
     if (withBump) {
-      lineItems.push({
-        quantity: 1,
-        price_data: {
-          currency: "usd",
-          unit_amount: CREDIT_BUMP.priceUsd * 100,
-          product_data: {
-            name: `${CREDIT_BUMP.credits} bonus credits`,
-            description: "Discounted add-on credits",
-          },
-        },
-      });
+      const bumpPriceId = getStripeBumpPriceId();
+      lineItems.push(
+        bumpPriceId
+          ? { price: bumpPriceId, quantity: 1 }
+          : {
+              quantity: 1,
+              price_data: {
+                currency: "usd",
+                unit_amount: CREDIT_BUMP.priceUsd * 100,
+                product_data: {
+                  name: `${CREDIT_BUMP.credits} bonus credits`,
+                  description: "Discounted add-on credits",
+                },
+              },
+            },
+      );
     }
 
     const checkout = await stripe.checkout.sessions.create({

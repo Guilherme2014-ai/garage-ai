@@ -34,9 +34,15 @@ category modifications they can make.
   history nav, undo/redo, reset — is free.
 - **Starting balance:** new users get `STARTING_CREDITS` (**15**) = 3 free
   category modifications.
-- **Packs:** credits are sold via Stripe Checkout in three one-time packs —
-  **60 / $5**, **120 / $10**, **240 / $20**. A completed purchase adds the
-  pack's credits **and** upgrades the buyer to `top-up`.
+- **Packs:** credits are sold via Stripe Checkout in four one-time packs —
+  **30 / $4.99**, **60 / $8.99** (Most Popular), **120 / $16.99**, **300 /
+  $39.99** (Best Value). A completed purchase adds the pack's credits **and**
+  upgrades the buyer to `top-up`. Savings badges are anchored to the internal
+  per-category list value `CATEGORY_VALUE_USD` (**$0.89** per 5 credits).
+- **Order bump:** an optional one-time add-on (`CREDIT_BUMP`, **50 / $4.99**) at
+  the steepest per-credit discount, offered in the checkout dialog and priced as
+  a dedicated Stripe price (`STRIPE_PRICE_BUMP`). Its credits are added on top of
+  the chosen pack.
 
 The canonical definitions live in one framework-agnostic module, mirroring
 `plan-mode.ts`:
@@ -204,7 +210,7 @@ CarIntakeForm.onReady(data, carName, planMode)
   if the balance can't cover a new category, the buy-credits dialog opens
   instead.
 - **Buy-credits dialog.** `UpgradeDialog` (`components/UpgradeDialog.tsx`) lists
-  the benefits and the three packs; each pack button calls
+  the benefits, the four packs and the order bump; continuing calls
   `POST /api/stripe/checkout` and opens Stripe Checkout in a new tab. It appears
   for free users `UPSELL_DELAY_MS` (90s) after entering the page, immediately
   when they click the blocked Download, and whenever a category can't be paid
@@ -213,9 +219,10 @@ CarIntakeForm.onReady(data, carName, planMode)
 ## Stripe checkout & webhook
 
 ```text
-POST /api/stripe/checkout   body { pack, buildId? }  -> Checkout Session (payment)
+POST /api/stripe/checkout   body { pack, bump?, buildId? }  -> Checkout Session (payment)
   resolves credits + price id server-side from CREDIT_PACKS (+ STRIPE_PRICE_*),
-  stamps metadata { userId, pack, credits }; returns { url }
+  adds the order-bump line item when bump=true (STRIPE_PRICE_BUMP or inline),
+  stamps metadata { userId, pack, credits } (credits = pack + bump); returns { url }
   success/cancel_url = /customize?build=<id>&credits=success|cancelled
 POST /api/stripe/webhook    verifies stripe-signature with STRIPE_WEBHOOK_SECRET
   on checkout.session.completed -> creditsService.grantPurchase(userId, pack)
@@ -248,5 +255,6 @@ or use `npm run db:studio`. The change takes effect on the next options request.
 | `DATABASE_URL` | Postgres connection string used by Drizzle (Neon/Supabase/Vercel PG) | — (required) |
 | `STRIPE_SECRET_KEY` | Stripe server SDK key (falls back to `PROD_STRIPE_KEY`) | — (required for checkout) |
 | `STRIPE_WEBHOOK_SECRET` | Verifies `checkout.session.completed` (`whsec_…`) | — (required for webhook) |
-| `STRIPE_PRICE_P60` / `STRIPE_PRICE_P120` / `STRIPE_PRICE_P240` | Live Stripe price ids for the 3 packs | — (required for checkout) |
+| `STRIPE_PRICE_P30` / `STRIPE_PRICE_P60` / `STRIPE_PRICE_P120` / `STRIPE_PRICE_P300` | Live Stripe price ids for the 4 packs | — (required for checkout) |
+| `STRIPE_PRICE_BUMP` | Live Stripe price id for the order bump (falls back to an inline price if unset) | optional |
 | `NEXT_PUBLIC_APP_URL` | Base URL for Stripe success/cancel redirects | request origin |
