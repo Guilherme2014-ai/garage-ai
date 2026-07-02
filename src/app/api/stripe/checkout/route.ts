@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type Stripe from "stripe";
 import { apiError, apiServerError, apiSuccess } from "@/lib/api/api-response";
 import { requireAuthAPI } from "@/lib/auth/auth-utils";
@@ -62,6 +63,15 @@ export async function POST(request: Request) {
   // server-side and stamped into metadata so the webhook never trusts the
   // client for an amount.
   const totalCredits = pack.credits + (withBump ? CREDIT_BUMP.credits : 0);
+  // Display total (USD) — analytics only; the authoritative charge is Stripe's.
+  const totalPriceUsd = pack.priceUsd + (withBump ? CREDIT_BUMP.priceUsd : 0);
+
+  // Shared id so the browser `Purchase` (fired on the success page) and the
+  // server-side Conversions API `Purchase` (fired from the webhook) deduplicate
+  // into one conversion in Meta. The Meta cookies let the server event match
+  // back to the browser session.
+  const fbEventId = randomUUID();
+  const { fbp, fbc } = readMetaCookies(request);
 
   try {
     const origin =
@@ -72,6 +82,9 @@ export async function POST(request: Request) {
       typeof buildId === "string" && buildId
         ? `&build=${encodeURIComponent(buildId)}`
         : "";
+    // Round-trip the pixel dedup id + total so the success page can fire the
+    // browser-side Purchase that matches the server-side one.
+    const pixelParams = `&fbEventId=${fbEventId}&fbValue=${totalPriceUsd}`;
 
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       { price: getStripePriceId(pack.id), quantity: 1 },
@@ -102,7 +115,7 @@ export async function POST(request: Request) {
     const checkout = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: lineItems,
-      success_url: `${origin}/customize?credits=success${buildParam}`,
+      success_url: `${origin}/customize?credits=success${buildParam}${pixelParams}`,
       cancel_url: `${origin}/customize?credits=cancelled${buildParam}`,
       client_reference_id: userId,
       metadata: {
@@ -110,6 +123,10 @@ export async function POST(request: Request) {
         pack: pack.id,
         credits: String(totalCredits),
         ...(withBump ? { bump: CREDIT_BUMP.id } : {}),
+        // Meta Conversions API dedup id + match cookies, read by the webhook.
+        fbEventId,
+        ...(fbp ? { fbp } : {}),
+        ...(fbc ? { fbc } : {}),
       },
     });
 
@@ -124,4 +141,26 @@ export async function POST(request: Request) {
     }
     return apiServerError(err);
   }
+}
+
+/**
+ * Reads Meta's `_fbp` / `_fbc` browser cookies from the request. They're set by
+ * the pixel and, when forwarded to the Conversions API, let Meta match the
+ * server event back to the browser session — the single biggest lever on
+ * server-side match quality. Both are absent until the pixel is live.
+ */
+function readMetaCookies(request: Request): {
+  fbp: string | null;
+  fbc: string | null;
+} {
+  const header = request.headers.get("cookie");
+  if (!header) return { fbp: null, fbc: null };
+
+  const jar = new Map<string, string>();
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    jar.set(part.slice(0, eq).trim(), part.slice(eq + 1).trim());
+  }
+  return { fbp: jar.get("_fbp") ?? null, fbc: jar.get("_fbc") ?? null };
 }

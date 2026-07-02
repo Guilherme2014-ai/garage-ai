@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { trackInitiateCheckout } from "@/lib/analytics/meta-pixel/events";
 import {
   bumpReferencePriceUsd,
   bumpSavingsPercent,
@@ -112,6 +113,11 @@ export function CreditsDialog({
   async function handleCheckout() {
     setError(null);
     setPending(true);
+    trackInitiateCheckout({
+      value: totalPrice,
+      contentIds: bumpChecked ? [selectedPack, CREDIT_BUMP.id] : [selectedPack],
+      numItems: bumpChecked ? 2 : 1,
+    });
     try {
       const url = await startCreditCheckout(selectedPack, {
         buildId,

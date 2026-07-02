@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import { creditsService } from "@/server/application/services";
 import { getCreditPack } from "@/server/domain/credits/credits";
+import { sendMetaConversion } from "@/server/infrastructure/meta/capi";
 import {
   getStripeWebhookSecret,
   stripe,
@@ -110,7 +111,54 @@ async function grantForSession(
   );
   if (result === "duplicate") {
     console.info(`Stripe event ${event.id} already processed; skipping grant`);
+    return;
   }
+
+  // Report the conversion to Meta only on the first (non-duplicate) grant, so
+  // Stripe's at-least-once retries can't double-count. Best-effort: never let a
+  // tracking failure surface as a 500 that makes Stripe re-deliver the event.
+  await reportPurchaseToMeta(checkout, userId);
+}
+
+/**
+ * Sends the server-side `Purchase` to the Meta Conversions API, matching the
+ * browser-side `Purchase` via the shared `fbEventId` stamped at checkout. Uses
+ * Stripe's settled amount as the authoritative value and the buyer's email +
+ * `_fbp`/`_fbc` cookies (also stamped at checkout) for match quality.
+ */
+async function reportPurchaseToMeta(
+  checkout: Stripe.Checkout.Session,
+  userId: string,
+): Promise<void> {
+  const eventId = checkout.metadata?.fbEventId;
+  if (!eventId) return; // Predates the pixel or checkout metadata; nothing to dedup against.
+
+  const value =
+    typeof checkout.amount_total === "number"
+      ? checkout.amount_total / 100
+      : undefined;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+  await sendMetaConversion({
+    eventName: "Purchase",
+    eventId,
+    eventSourceUrl: appUrl ? `${appUrl}/customize` : undefined,
+    actionSource: "website",
+    userData: {
+      email: checkout.customer_details?.email,
+      externalId: userId,
+      fbp: checkout.metadata?.fbp,
+      fbc: checkout.metadata?.fbc,
+    },
+    customData: {
+      currency: (checkout.currency ?? "usd").toUpperCase(),
+      value,
+      content_type: "product",
+      content_ids: checkout.metadata?.pack
+        ? [checkout.metadata.pack]
+        : undefined,
+    },
+  });
 }
 
 /**

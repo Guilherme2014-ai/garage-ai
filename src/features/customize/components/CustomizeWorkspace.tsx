@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { trackPurchase } from "@/lib/analytics/meta-pixel/events";
 import { fetchCredits } from "../api/creditsApi";
 import { CREDITS_PER_CATEGORY } from "../core/credits/credits";
 import {
@@ -130,7 +131,21 @@ export function CustomizeWorkspace({
     if (params.get("credits") !== "success") {
       return;
     }
+
+    // Fire the browser-side Meta Purchase, deduped against the server-side one
+    // via the shared eventId the checkout route stamped into the success URL.
+    const fbEventId = params.get("fbEventId");
+    if (fbEventId) {
+      const value = Number.parseFloat(params.get("fbValue") ?? "");
+      trackPurchase(
+        { value: Number.isFinite(value) ? value : 0 },
+        { eventID: fbEventId },
+      );
+    }
+
     params.delete("credits");
+    params.delete("fbEventId");
+    params.delete("fbValue");
     const url = new URL(window.location.href);
     url.search = params.toString();
     window.history.replaceState(window.history.state, "", url.toString());

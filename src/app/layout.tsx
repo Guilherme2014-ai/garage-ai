@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { MetaPixel } from "@/lib/analytics/meta-pixel/MetaPixel";
 import { AuthProvider } from "@/lib/auth/auth-provider";
 import "./globals.css";
 
@@ -88,6 +89,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <MetaPixel />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

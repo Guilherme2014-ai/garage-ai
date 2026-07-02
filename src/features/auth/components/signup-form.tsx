@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import { trackCompleteRegistration } from "@/lib/analytics/meta-pixel/events";
 import { GoogleButton } from "./google-button";
 
 export function SignUpForm() {
@@ -32,6 +33,8 @@ export function SignUpForm() {
         setError(data.message ?? "Something went wrong");
         return;
       }
+
+      trackCompleteRegistration({ method: "email" });
 
       const signInResult = await signIn("credentials", {
         email,
